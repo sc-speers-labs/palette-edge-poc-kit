@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Palette Edge — POC Config Generator</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg:        #0d0f14;
+    --surface:   #151820;
+    --border:    #252a35;
+    --border-hi: #353d50;
+    --text:      #c9d1e0;
+    --muted:     #5a6478;
+    --accent:    #4f9cf9;
+    --accent-dim:#1e3a5f;
+    --green:     #3ecf8e;
+    --green-dim: #0f3324;
+    --amber:     #f5a623;
+    --amber-dim: #3a2800;
+    --red:       #f56565;
+    --mono:      'IBM Plex Mono', monospace;
+    --sans:      'IBM Plex Sans', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* VERSION BANNER */
+  .version-banner {
+    background: var(--accent);
+    color: #fff;
+    text-align: center;
+    padding: 8px 24px;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+  }
+  .version-banner .vbadge {
+    background: rgba(0,0,0,0.2);
+    padding: 2px 10px;
+    border-radius: 3px;
+  }
+
+  /* HEADER */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 32px 48px 28px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+  }
+  .header-logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .logo-mark {
+    width: 36px;
+    height: 36px;
+    background: var(--accent);
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    flex-shrink: 0;
+  }
+  .header-titles h1 {
+    font-family: var(--mono);
+    font-size: 18px;
+    font-weight: 600;
+    color: #fff;
+    letter-spacing: -0.01em;
+  }
+  .header-titles p {
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  .poc-badge {
+    background: var(--amber-dim);
+    color: var(--amber);
+    border: 1px solid var(--amber);
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 3px;
+    letter-spacing: 0.1em;
+    white-space: nowrap;
+    align-self: center;
+  }
+
+  /* LAYOUT */
+  .main {
+    display: grid;
+    grid-template-columns: 420px 1fr;
+    min-height: calc(100vh - 120px);
+  }
+
+  /* FORM PANEL */
+  .form-panel {
+    border-right: 1px solid var(--border);
+    padding: 32px 36px;
+    overflow-y: auto;
+  }
+
+  .section-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .form-section {
+    margin-bottom: 32px;
+  }
+
+  .field {
+    margin-bottom: 18px;
+  }
+  .field label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .field label .req {
+    color: var(--accent);
+    font-size: 10px;
+  }
+  .field label .opt {
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 400;
+  }
+
+  input[type="text"],
+  input[type="password"],
+  select {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 9px 12px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  input[type="text"]:focus,
+  input[type="password"]:focus,
+  select:focus {
+    border-color: var(--accent);
+  }
+  input.invalid {
+    border-color: var(--red);
+  }
+  select option { background: var(--surface); }
+
+  .field-hint {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 5px;
+    line-height: 1.5;
+  }
+  .field-hint.warn {
+    color: var(--amber);
+  }
+
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    margin-bottom: 10px;
+  }
+  .toggle-row label {
+    font-size: 13px;
+    color: var(--text);
+    cursor: pointer;
+  }
+  .toggle-row .toggle-desc {
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .toggle {
+    position: relative;
+    width: 36px;
+    height: 20px;
+    flex-shrink: 0;
+  }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider {
+    position: absolute;
+    inset: 0;
+    background: var(--border-hi);
+    border-radius: 20px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .toggle-slider::before {
+    content: '';
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    left: 3px;
+    top: 3px;
+    background: var(--muted);
+    border-radius: 50%;
+    transition: transform 0.2s, background 0.2s;
+  }
+  .toggle input:checked + .toggle-slider { background: var(--accent-dim); }
+  .toggle input:checked + .toggle-slider::before {
+    transform: translateX(16px);
+    background: var(--accent);
+  }
+
+  .radio-group {
+    display: flex;
+    gap: 8px;
+  }
+  .radio-opt {
+    flex: 1;
+    position: relative;
+  }
+  .radio-opt input { position: absolute; opacity: 0; }
+  .radio-opt label {
+    display: block;
+    text-align: center;
+    padding: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: 12px;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .radio-opt input:checked + label {
+    border-color: var(--accent);
+    background: var(--accent-dim);
+    color: #fff;
+  }
+
+  /* OUTPUT PANEL */
+  .output-panel {
+    padding: 32px 36px;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+  }
+
+  .output-block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .output-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(255,255,255,0.02);
+  }
+  .output-filename {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .file-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+  }
+  .output-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .btn {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    padding: 6px 14px;
+    border-radius: 4px;
+    border: 1px solid;
+    cursor: pointer;
+    transition: all 0.15s;
+    outline: none;
+  }
+  .btn-copy {
+    background: transparent;
+    border-color: var(--border-hi);
+    color: var(--muted);
+  }
+  .btn-copy:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .btn-copy.copied {
+    border-color: var(--green);
+    color: var(--green);
+  }
+  .btn-download {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .btn-download:hover {
+    background: var(--accent);
+    color: #fff;
+  }
+
+  .output-code {
+    padding: 20px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.7;
+    white-space: pre;
+    overflow-x: auto;
+    color: var(--text);
+    max-height: 420px;
+    overflow-y: auto;
+  }
+
+  /* Syntax highlighting */
+  .hl-key   { color: #79b8ff; }
+  .hl-val   { color: #9ecbff; }
+  .hl-str   { color: var(--green); }
+  .hl-cmt   { color: var(--muted); font-style: italic; }
+  .hl-req   { color: var(--amber); }
+  .hl-head  { color: #b392f0; }
+
+  /* VALIDATION */
+  .validation-bar {
+    margin: 0 36px 0;
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-family: var(--mono);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .validation-bar.ok {
+    background: var(--green-dim);
+    border: 1px solid var(--green);
+    color: var(--green);
+  }
+  .validation-bar.errors {
+    background: #2d1515;
+    border: 1px solid var(--red);
+    color: var(--red);
+  }
+  .validation-bar ul {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+  }
+  .validation-bar ul li::before { content: '✗ '; }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div class="version-banner">
+  <span>PALETTE EDGE — POC CONFIG GENERATOR</span>
+  <span class="vbadge">v1.0.0</span>
+  <span class="vbadge">Built: 2026-05-14</span>
+  <span class="vbadge">K3s · Ubuntu · CanvOS</span>
+</div>
+
+<header>
+  <div class="header-logo">
+    <div class="logo-mark"></div>
+    <div class="header-titles">
+      <h1>Edge Config Generator</h1>
+      <p>Generate <code>.arg</code> and <code>user-data</code> files for your EdgeForge build</p>
+    </div>
+  </div>
+  <div class="poc-badge">POC / EVALUATION</div>
+</header>
+
+<div class="main">
+
+  <!-- FORM -->
+  <div class="form-panel">
+
+    <div class="form-section">
+      <div class="section-label">Palette Connection</div>
+
+      <div class="field">
+        <label>Palette Endpoint <span class="opt">default: SaaS</span></label>
+        <input type="text" id="paletteEndpoint" value="console.spectrocloud.com" oninput="update()">
+        <div class="field-hint">Leave as-is for Palette SaaS. Change for self-hosted instances.</div>
+      </div>
+
+      <div class="field">
+        <label>Registration Token <span class="req">required</span></label>
+        <input type="text" id="edgeHostToken" placeholder="e.g. NWZkZmU0NmUwNjE1ZjQ2..." oninput="update()" class="invalid">
+        <div class="field-hint">Tenant Settings → Security → Registration Tokens → Add New</div>
+      </div>
+
+      <div class="field">
+        <label>Project Name</label>
+        <input type="text" id="projectName" value="Default" oninput="update()">
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="section-label">Edge Host</div>
+
+      <div class="field">
+        <label>OS Password <span class="req">required</span></label>
+        <input type="text" id="osPassword" value="Spectro2026!" oninput="update()">
+        <div class="field-hint">Password for the <code>kairos</code> local OS user.</div>
+      </div>
+
+      <div class="field">
+        <label>Ubuntu Version</label>
+        <div class="radio-group">
+          <div class="radio-opt">
+            <input type="radio" name="osVersion" id="os22" value="22" checked onchange="update()">
+            <label for="os22">Ubuntu 22.04</label>
+          </div>
+          <div class="radio-opt">
+            <input type="radio" name="osVersion" id="os24" value="24" onchange="update()">
+            <label for="os24">Ubuntu 24.04</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-row label" style="font-size:13px;color:var(--text);margin-bottom:2px;">Power off after install</div>
+          <div class="toggle-desc">Off = reboot automatically. On = shut down after flashing (ship-to-site workflow).</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="poweroff" onchange="update()">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="section-label">Provider Image Registry</div>
+
+      <div class="field">
+        <label>Image Registry</label>
+        <input type="text" id="imageRegistry" value="ttl.sh" oninput="update()">
+        <div class="field-hint warn" id="ttlWarning">⚠ ttl.sh images expire after 24 hours — testing only.</div>
+      </div>
+
+      <div class="field">
+        <label>Image Repo</label>
+        <input type="text" id="imageRepo" value="ubuntu" oninput="update()">
+      </div>
+
+      <div class="field">
+        <label>Custom Tag <span class="req">required</span></label>
+        <input type="text" id="customTag" value="demo" oninput="update()">
+        <div class="field-hint">Alphanumeric lowercase only. e.g. <code>poc-v1</code></div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="section-label">Kubernetes</div>
+
+      <div class="field">
+        <label>K3s Version</label>
+        <select id="k3sVersion" onchange="update()">
+          <option value="1.33.3">1.33.3 (latest)</option>
+          <option value="1.32.3" selected>1.32.3</option>
+          <option value="1.31.7">1.31.7</option>
+          <option value="1.30.9">1.30.9</option>
+        </select>
+        <div class="field-hint">Check <a href="https://github.com/spectrocloud/CanvOS/blob/main/k8s_version.json" target="_blank" style="color:var(--accent)">k8s_version.json</a> in CanvOS for all supported versions.</div>
+      </div>
+
+      <div class="toggle-row">
+        <div>
+          <div style="font-size:13px;color:var(--text);margin-bottom:2px;">Two-node HA mode</div>
+          <div class="toggle-desc">Replaces etcd with Postgres for HA with exactly 2 hosts. Image is not interchangeable with standard images.</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="twoNode" onchange="update()">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <div id="twoNodeWarning" style="display:none; margin-top:4px; padding:10px 12px; background:#2d1a00; border:1px solid var(--amber); border-radius:5px; font-size:12px; color:var(--amber); line-height:1.6;">
+        &#9888; <strong>Two-node image cannot be used for standard clusters.</strong><br>
+        Requires exactly 2 edge hosts in Palette. The custom tag is suffixed with <code style="color:var(--amber)">-2node</code> to distinguish this image.
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- OUTPUT -->
+  <div class="output-panel">
+
+    <div id="validationBar" class="validation-bar errors" style="margin:0;">
+      <ul id="validationList"></ul>
+    </div>
+
+    <!-- .arg -->
+    <div class="output-block">
+      <div class="output-header">
+        <div class="output-filename">
+          <div class="file-dot"></div>
+          .arg
+        </div>
+        <div class="output-actions">
+          <button class="btn btn-copy" id="copyArg" onclick="copyFile('argContent','copyArg')">Copy</button>
+          <button class="btn btn-download" onclick="downloadFile('argContent', '.arg')">Download</button>
+        </div>
+      </div>
+      <div class="output-code" id="argContent"></div>
+    </div>
+
+    <!-- user-data -->
+    <div class="output-block">
+      <div class="output-header">
+        <div class="output-filename">
+          <div class="file-dot"></div>
+          user-data
+        </div>
+        <div class="output-actions">
+          <button class="btn btn-copy" id="copyUserdata" onclick="copyFile('userdataContent','copyUserdata')">Copy</button>
+          <button class="btn btn-download" onclick="downloadFile('userdataContent', 'user-data')">Download</button>
+        </div>
+      </div>
+      <div class="output-code" id="userdataContent"></div>
+    </div>
+
+    <!-- BYOOS cluster profile snippet -->
+    <div class="output-block">
+      <div class="output-header">
+        <div class="output-filename">
+          <div class="file-dot" style="background:var(--amber)"></div>
+          Cluster Profile — BYOOS OS Layer values
+        </div>
+        <div class="output-actions">
+          <button class="btn btn-copy" id="copyByoos" onclick="copyFile('byoosContent','copyByoos')">Copy</button>
+        </div>
+      </div>
+      <div class="output-code" id="byoosContent"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // ─── CANVOS VERSION (update this when upgrading CanvOS) ───────────────────
+  const CANVOS_VERSION = 'v4.8.8';
+  // ─────────────────────────────────────────────────────────────────────────
+
+  function val(id) { return document.getElementById(id).value.trim(); }
+  function checked(id) { return document.getElementById(id).checked; }
+  function radio(name) {
+    return document.querySelector(`input[name="${name}"]:checked`).value;
+  }
+
+  function validate() {
+    const errors = [];
+    const token = val('edgeHostToken');
+    const tag = val('customTag');
+    const password = val('osPassword');
+
+    if (!token) errors.push('Registration token is required');
+    if (!tag) errors.push('Custom tag is required');
+    if (!password) errors.push('OS password is required');
+    if (tag && !/^[a-z0-9-]+$/.test(tag)) errors.push('Custom tag must be alphanumeric lowercase');
+
+    // token field highlight
+    document.getElementById('edgeHostToken').classList.toggle('invalid', !token);
+    document.getElementById('customTag').classList.toggle('invalid', !tag || !/^[a-z0-9-]+$/.test(tag));
+    document.getElementById('osPassword').classList.toggle('invalid', !password);
+
+    const bar = document.getElementById('validationBar');
+    const list = document.getElementById('validationList');
+    if (errors.length === 0) {
+      bar.className = 'validation-bar ok';
+      bar.innerHTML = '✓ &nbsp;All required fields complete — files are ready';
+    } else {
+      bar.className = 'validation-bar errors';
+      list.innerHTML = errors.map(e => `<li>${e}</li>`).join('');
+      bar.innerHTML = '';
+      bar.appendChild(list);
+    }
+    return errors.length === 0;
+  }
+
+  function esc(s) {
+    return String(s)
+      .replace(/&/g,'&amp;')
+      .replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;');
+  }
+
+  function renderArg() {
+    const registry  = val('imageRegistry');
+    const repo      = val('imageRepo');
+    const baseTag   = val('customTag') || '<your-tag>';
+    const osVer     = radio('osVersion');
+    const k3sVer    = val('k3sVersion');
+    const poweroff  = checked('poweroff');
+    const twoNode   = checked('twoNode');
+    const tag       = twoNode && baseTag !== '<your-tag>' ? baseTag + '-2node' : baseTag;
+
+    // Show/hide two-node warning
+    document.getElementById('twoNodeWarning').style.display = twoNode ? 'block' : 'none';
+
+    const raw = [
+      `# ──────────────────────────────────────────────────────`,
+      `# Palette Edge — CanvOS build arguments`,
+      `# Generated: ${new Date().toISOString().split('T')[0]}  |  Generator v1.0.0`,
+      `# ──────────────────────────────────────────────────────`,
+      ``,
+      `ARCH=amd64`,
+      `OS_DISTRIBUTION=ubuntu`,
+      `OS_VERSION=${osVer}`,
+      ``,
+      `# Kubernetes`,
+      `K8S_DISTRIBUTION=k3s`,
+      `K8S_VERSION=${k3sVer}`,
+      ``,
+      `# Provider image location`,
+      `IMAGE_REGISTRY=${registry}`,
+      `IMAGE_REPO=${repo}`,
+      `CUSTOM_TAG=${tag}`,
+      ``,
+      `# Build options`,
+      `ISO_NAME=palette-edge-installer`,
+      `UPDATE_KERNEL=false`,
+      `FIPS_ENABLED=false`,
+      `IS_UKI=false`,
+      `CIS_HARDENING=false`,
+      `TWO_NODE=${twoNode ? 'true' : 'false'}`,
+      `DISABLE_SELINUX=true`,
+      `INCLUDE_MS_SECUREBOOT_KEYS=false`,
+      `AUTO_ENROLL_SECUREBOOT_KEYS=false`,
+      ``,
+      `# Proxy — leave blank if not used`,
+      `HTTPS_PROXY=`,
+      `HTTP_PROXY=`,
+      `PROXY_CERT_PATH=`,
+    ];
+
+    // Syntax highlight
+    const html = raw.map(line => {
+      if (line.startsWith('#')) return `<span class="hl-cmt">${esc(line)}</span>`;
+      if (line === '') return '';
+      const [k, ...rest] = line.split('=');
+      const v = rest.join('=');
+      const isPlaceholder = v.startsWith('<');
+      const vClass = isPlaceholder ? 'hl-req' : 'hl-val';
+      return `<span class="hl-key">${esc(k)}</span>=<span class="${vClass}">${esc(v)}</span>`;
+    }).join('\n');
+
+    document.getElementById('argContent').innerHTML = html;
+    return raw.join('\n');
+  }
+
+  function renderUserdata() {
+    const endpoint  = val('paletteEndpoint') || 'console.spectrocloud.com';
+    const token     = val('edgeHostToken') || '<your-registration-token>';
+    const project   = val('projectName') || 'Default';
+    const password  = val('osPassword') || '<your-os-password>';
+    const poweroff  = checked('poweroff');
+
+    const raw = [
+      `#cloud-config`,
+      `stylus:`,
+      `  site:`,
+      `    paletteEndpoint: ${endpoint}`,
+      `    edgeHostToken: ${token}`,
+      `    projectName: ${project}`,
+      ``,
+      `install:`,
+      `  reboot: ${poweroff ? 'false' : 'true'}`,
+      `  poweroff: ${poweroff ? 'true' : 'false'}`,
+      ``,
+      `stages:`,
+      `  initramfs:`,
+      `    - users:`,
+      `        kairos:`,
+      `          groups:`,
+      `            - sudo`,
+      `          passwd: ${password}`,
+      `      name: Create kairos user`,
+    ];
+
+    const html = raw.map(line => {
+      if (line.startsWith('#')) return `<span class="hl-cmt">${esc(line)}</span>`;
+      if (line === '') return '';
+      // key: value lines
+      const trimmed = line.trimStart();
+      const indent  = line.length - trimmed.length;
+      const pad     = ' '.repeat(indent);
+      const colonIdx = trimmed.indexOf(':');
+      if (colonIdx === -1) return esc(line);
+      const k = trimmed.substring(0, colonIdx);
+      const v = trimmed.substring(colonIdx + 1);
+      const isPlaceholder = v.trim().startsWith('<');
+      const vClass = isPlaceholder ? 'hl-req' : 'hl-str';
+      return `${pad}<span class="hl-key">${esc(k)}</span>:<span class="${vClass}">${esc(v)}</span>`;
+    }).join('\n');
+
+    document.getElementById('userdataContent').innerHTML = html;
+    return raw.join('\n');
+  }
+
+  function renderByoos() {
+    const registry  = val('imageRegistry') || '<your-registry>';
+    const repo      = val('imageRepo') || 'ubuntu';
+    const baseTag   = val('customTag') || '<your-tag>';
+    const twoNode   = checked('twoNode');
+    const tag       = twoNode && baseTag !== '<your-tag>' ? baseTag + '-2node' : baseTag;
+    const osVer     = radio('osVersion');
+    const k3sVer    = val('k3sVersion');
+
+    const raw = [
+      `# ── Paste into the BYOOS (Edge) OS layer in your cluster profile ──`,
+      `# system.peVersion should match the CanvOS tag used in your build.`,
+      ``,
+      `pack:`,
+      `  content:`,
+      `    images:`,
+      `      - image: "{{.spectro.pack.edge-native-byoi.options.system.uri}}"`,
+      `options:`,
+      `  system.uri: "{{ .spectro.pack.edge-native-byoi.options.system.registry }}/{{ .spectro.pack.edge-native-byoi.options.system.repo }}:{{ .spectro.pack.edge-native-byoi.options.system.k8sDistribution }}-{{ .spectro.system.kubernetes.version }}-{{ .spectro.pack.edge-native-byoi.options.system.peVersion }}-{{ .spectro.pack.edge-native-byoi.options.system.customTag }}"`,
+      `  system.registry: ${registry}`,
+      `  system.repo: ${repo}`,
+      `  system.k8sDistribution: k3s`,
+      `  system.osName: ubuntu`,
+      `  system.peVersion: ${CANVOS_VERSION}`,
+      `  system.customTag: ${tag}`,
+      `  system.osVersion: ${osVer}`,
+    ];
+
+    const html = raw.map(line => {
+      if (line.startsWith('#')) return `<span class="hl-cmt">${esc(line)}</span>`;
+      if (line === '') return '';
+      const trimmed = line.trimStart();
+      const indent  = line.length - trimmed.length;
+      const pad     = ' '.repeat(indent);
+      if (trimmed.startsWith('-')) return `${pad}<span class="hl-val">${esc(trimmed)}</span>`;
+      const colonIdx = trimmed.indexOf(':');
+      if (colonIdx === -1) return esc(line);
+      const k = trimmed.substring(0, colonIdx);
+      const v = trimmed.substring(colonIdx + 1);
+      const isPlaceholder = v.trim().startsWith('<');
+      const vClass = isPlaceholder ? 'hl-req' : 'hl-str';
+      return `${pad}<span class="hl-key">${esc(k)}</span>:<span class="${vClass}">${esc(v)}</span>`;
+    }).join('\n');
+
+    document.getElementById('byoosContent').innerHTML = html;
+  }
+
+  function update() {
+    validate();
+    renderArg();
+    renderUserdata();
+    renderByoos();
+
+    // ttl.sh warning visibility
+    const reg = val('imageRegistry');
+    document.getElementById('ttlWarning').style.display =
+      reg === 'ttl.sh' ? 'block' : 'none';
+  }
+
+  function getRawContent(id) {
+    // Strip HTML tags to get plain text
+    const el = document.getElementById(id);
+    return el.innerText || el.textContent;
+  }
+
+  function copyFile(contentId, btnId) {
+    const text = getRawContent(contentId);
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = document.getElementById(btnId);
+      const orig = btn.textContent;
+      btn.textContent = 'Copied ✓';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = orig;
+        btn.classList.remove('copied');
+      }, 2000);
+    });
+  }
+
+  function downloadFile(contentId, filename) {
+    const text = getRawContent(contentId);
+    const blob = new Blob([text], { type: 'text/plain' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  // Initial render
+  update();
+</script>
+</body>
+</html>
