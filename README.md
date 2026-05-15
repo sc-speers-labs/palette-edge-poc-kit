@@ -10,11 +10,11 @@ A field toolkit for standing up Palette Edge proof-of-concept deployments quickl
 
 | Item | Description |
 |---|---|
-| `config-generator/palette-edge-config-generator.html` | Browser-based tool that generates `.arg` and `user-data` files for an EdgeForge build |
-| `guides/edgeforge-k3s.md` | Step-by-step EdgeForge build and cluster deployment guide (K3s + Ubuntu) |
-| `known-issues/dell-idrac-grub-boot.md` | Dell PowerEdge iDRAC virtual media boot failure and fix |
-| `known-issues/common-build-gotchas.md` | Frequent CanvOS build mistakes and how to avoid them |
-| `CHANGELOG.md` | Version history |
+| [`palette-edge-config-generator.html`](palette-edge-config-generator.html) ([launch ▶](https://sc-speers-labs.github.io/palette-edge-poc-kit/palette-edge-config-generator.html)) | Browser-based tool that generates `.arg` and `user-data` files for an EdgeForge build |
+| [`edgeforge-k3s.md`](edgeforge-k3s.md) | Step-by-step EdgeForge build and cluster deployment guide (K3s + Ubuntu) |
+| [`dell-idrac-grub-boot.md`](dell-idrac-grub-boot.md) | Dell PowerEdge iDRAC virtual media boot failure and fix |
+| [`common-build-gotchas.md`](common-build-gotchas.md) | Frequent CanvOS build mistakes and how to avoid them |
+| [`CHANGELOG.md`](CHANGELOG.md) | Version history |
 
 ---
 
@@ -22,13 +22,13 @@ A field toolkit for standing up Palette Edge proof-of-concept deployments quickl
 
 ### 1. Generate your config files
 
-Open `config-generator/palette-edge-config-generator.html` in any modern browser — no server or install required. Fill in the form and copy or download your `.arg` and `user-data` files.
+Launch the generator directly in your browser: **[palette-edge-config-generator](https://sc-speers-labs.github.io/palette-edge-poc-kit/palette-edge-config-generator.html)** — no server or install required. Or open `palette-edge-config-generator.html` from a local clone. Fill in the form and copy or download your `.arg` and `user-data` files.
 
 > **Security note:** The generator includes default values for convenience. Always replace the OS password and registration token with your own before use. Do not commit generated files containing real tokens to source control.
 
 ### 2. Build your Edge artifacts
 
-Follow the steps in `guides/edgeforge-k3s.md` to clone CanvOS, place your config files, and run the build. The guide covers:
+Follow the steps in [`edgeforge-k3s.md`](edgeforge-k3s.md) to clone CanvOS, place your config files, and run the build. The guide covers:
 
 - Prerequisites and Docker setup
 - `.arg` and `user-data` configuration
@@ -39,7 +39,7 @@ Follow the steps in `guides/edgeforge-k3s.md` to clone CanvOS, place your config
 
 ### 3. Troubleshooting
 
-Check the `known-issues/` folder if you hit problems during boot or build. The Dell iDRAC grub issue in particular affects a wide range of PowerEdge hardware booting from virtual media.
+Check [`dell-idrac-grub-boot.md`](dell-idrac-grub-boot.md) and [`common-build-gotchas.md`](common-build-gotchas.md) if you hit problems during boot or build. The Dell iDRAC grub issue in particular affects a wide range of PowerEdge hardware booting from virtual media.
 
 ---
 
