@@ -4,8 +4,8 @@
 set -euo pipefail
 source "$(dirname "$0")/lib.sh" >/dev/null 2>&1 || true
 : "${PALETTE_API_KEY:?}" ; : "${WORKDIR:=$(pwd)/build}"
-: "${PALETTE_API:=https://api.spectrocloud.com}"
-: "${PALETTE_PROJECT_UID:?Palette project UID to scope the search}"   # TODO: set in job/env
+: "${PALETTE_API:=https://cust-eng.console.spectrocloud.com}"
+: "${PALETTE_PROJECT_UID:=6539402abeefa11ca7267d44}"   # cust-eng / SA-Dan-Speers
 source "${WORKDIR}/vm.env"
 TIMEOUT_MIN="${REGISTER_TIMEOUT_MIN:-25}"
 

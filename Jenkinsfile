@@ -40,6 +40,9 @@ pipeline {
     // LXD_HOST_POOL    = '<pool>'  // optional: restrict new candidates to a MaaS pool
     // LXD_HOST_SYSTEM_ID = '<id>'  // optional override: pin to one specific machine
     MAAS_API            = 'http://homelab.cabin:5240/MAAS/api/2.0'
+    // Palette tenant: cust-eng / SA-Dan-Speers project.
+    PALETTE_API         = 'https://cust-eng.console.spectrocloud.com'
+    PALETTE_PROJECT_UID = '6539402abeefa11ca7267d44'
     WORKDIR             = "${WORKSPACE}/build"
   }
 

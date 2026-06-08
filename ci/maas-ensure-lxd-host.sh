@@ -24,7 +24,11 @@ LXD_REMOTE=cabin
 export LXD_CONF="${WORKDIR}/.lxd"
 mkdir -p "${WORKDIR}" "${LXD_CONF}"
 
-maas() { curl -fsS -H "Authorization: OAuth ${MAAS_OAUTH}" "$@"; }
+# MaaS OAuth1 PLAINTEXT. MAAS_OAUTH = consumer_key:token_key:token_secret (the 3-part API key).
+maas() {
+  local ck tk sec; IFS=: read -r ck tk sec <<<"${MAAS_OAUTH}"
+  curl -fsS -H "Authorization: OAuth oauth_version=\"1.0\", oauth_signature_method=\"PLAINTEXT\", oauth_consumer_key=\"${ck}\", oauth_token=\"${tk}\", oauth_signature=\"&${sec}\", oauth_nonce=\"$(date +%s%N)\", oauth_timestamp=\"$(date +%s)\"" "$@"
+}
 
 # First assigned IP of a machine, from MaaS.
 machine_ip() {  # $1 = system_id
