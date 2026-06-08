@@ -7,9 +7,9 @@ kind: Pod
 metadata:
   namespace: edgeforge-build          # must be labeled pod-security.kubernetes.io/enforce=privileged
 spec:
-  # Pin to a big-disk worker; CanvOS scratch wants ~20GB+.
-  nodeSelector:
-    kubernetes.io/hostname: superb-emu
+  # No hostname pin — let the scheduler place this on any worker with capacity, so
+  # freeing a specific node back to MaaS (to become the LXD host) never strands the
+  # build. The resource requests below steer it onto a big-disk node.
   containers:
     - name: earthly
       image: earthly/earthly:v0.8.15   # TODO: pin a version with docker CLI for `docker push`

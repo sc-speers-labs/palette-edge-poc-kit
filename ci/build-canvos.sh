@@ -1,58 +1,57 @@
 #!/usr/bin/env bash
-# Build the Edge artifacts with CanvOS/Earthly, push the provider image to ttl.sh,
-# and publish the installer ISO where the LXD host can fetch it.
-# Runs inside the privileged Earthly pod (defaultContainer 'earthly').
-# Writes build/outputs.env with IMAGE_REF and ISO_URL for downstream stages.
+# Build Edge artifacts with CanvOS/Earthly, push the provider image, and publish the
+# installer ISO to the in-cluster file server. Runs in the privileged Earthly pod
+# (defaultContainer 'earthly'). Writes build/outputs.env for downstream stages.
+#
+# The .arg file (from the generator) is the SINGLE SOURCE OF TRUTH for the image
+# coordinates — the generator's BYOOS system.uri is built from the SAME values, so the
+# tag we push always matches the tag the cluster profile pulls.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh" >/dev/null 2>&1 || true
 CI_DIR="$(cd "$(dirname "$0")" && pwd)"
 : "${WORKDIR:=$(pwd)/build}"
 : "${CANVOS_VERSION:=v4.9.10}"
-: "${BUILD_NAME:=poc}"
-: "${TTLSH_NAMESPACE:?ttl.sh namespace credential required}"
+: "${ISO_PUBLISH_BASE:=http://edge-iso.cabin}"
+[[ -s "${WORKDIR}/arg" ]] || die "render-config must run first (no build/arg)"
 
-# ttl.sh is ephemeral — keep build->boot in one pipeline run. 24h is the max.
-TTL="${TTLSH_TTL:-24h}"
-IMAGE_REPO="ttl.sh/${TTLSH_NAMESPACE}/palette-edge"
-# Pull k8s/os selectors rendered earlier (defaults match the generator).
-[[ -f "${WORKDIR}/meta.env" ]] && source "${WORKDIR}/meta.env"
-: "${K8S_VERSION:=1.32.13}" ; : "${OS_VERSION:=22.04}" ; : "${K8S_DISTRIBUTION:=k3s}"
-IMAGE_TAG="${K8S_DISTRIBUTION}-${K8S_VERSION}-${CANVOS_VERSION}-${BUILD_NAME}"
-IMAGE_REF="${IMAGE_REPO}:${IMAGE_TAG}"
-
-log "Building CanvOS ${CANVOS_VERSION} -> ${IMAGE_REF}"
 SRC="${WORKDIR}/CanvOS"
 rm -rf "${SRC}"
+log "Cloning CanvOS ${CANVOS_VERSION}"
 git clone --depth 1 --branch "${CANVOS_VERSION}" https://github.com/spectrocloud/CanvOS.git "${SRC}"
 cp "${WORKDIR}/arg"       "${SRC}/.arg"
 cp "${WORKDIR}/user-data" "${SRC}/user-data"
 
+# Image coordinates straight from .arg so they match the BYOOS profile URI exactly.
+arg() { grep -E "^$1=" "${SRC}/.arg" | head -1 | cut -d= -f2-; }
+REG="$(arg IMAGE_REGISTRY)"; REPO="$(arg IMAGE_REPO)"; CT="$(arg CUSTOM_TAG)"
+KD="$(arg K8S_DISTRIBUTION)"; KV="$(arg K8S_VERSION)"
+IMAGE_REF="${REG}/${REPO}:${KD}-${KV}-${CANVOS_VERSION}-${CT}"
+
+# ttl.sh only accepts a DURATION as the tag (1h..24h); it rejects semantic tags like
+# this one, and the edge host pulls by the semantic tag — so ttl.sh can't serve a
+# CanvOS provider image. Fail loudly rather than push something unpullable.
+if [[ "${REG}" == "ttl.sh" ]]; then
+  die "IMAGE_REGISTRY=ttl.sh can't hold the semantic tag '${IMAGE_REF#*:}'. Use a registry that keeps semantic tags (recommended: the in-cluster registry — see BUILD-PIPELINE.md)."
+fi
+
+log "Building -> ${IMAGE_REF}"
 pushd "${SRC}" >/dev/null
-  # TODO: pin exact Earthly targets per CanvOS version; --push uploads the provider image.
-  earthly --allow-privileged +build-all-images \
-    --IMAGE_REGISTRY="${IMAGE_REPO%/*}" \
-    --IMAGE_REPO="${IMAGE_REPO##*/}" \
-    --CUSTOM_TAG="${BUILD_NAME}" \
-    --K8S_VERSION="${K8S_VERSION}" \
-    --OS_VERSION="${OS_VERSION}"
-  # Provider image -> ttl.sh
+  # Feed every UPPER_CASE key from .arg to the orchestrator target as an Earthly build arg.
+  mapfile -t EARGS < <(grep -E '^[A-Z][A-Z0-9_]*=' .arg | sed 's/^/--/')
+  earthly --allow-privileged +build-all-images "${EARGS[@]}"
   docker push "${IMAGE_REF}"
-  # Locate the installer ISO produced by the build.
   ISO_LOCAL="$(ls build/*.iso 2>/dev/null | head -1 || true)"
   [[ -n "${ISO_LOCAL}" ]] || die "No ISO produced by CanvOS build"
   ISO_ABS="$(pwd)/${ISO_LOCAL}"
 popd >/dev/null
 
 # Publish the ISO to the shared edge-iso volume (served by in-cluster nginx).
-: "${ISO_PUBLISH_BASE:=http://edge-iso.cabin}"
-ISO_NAME="palette-edge-${BUILD_NAME}.iso"
+ISO_NAME="palette-edge-${CT}.iso"
 "${CI_DIR}/ci_publish_iso.sh" "${ISO_ABS}" "${ISO_NAME}"
-ISO_URL="${ISO_PUBLISH_BASE}/${ISO_NAME}"
 
 cat > "${WORKDIR}/outputs.env" <<EOF
 IMAGE_REF=${IMAGE_REF}
-ISO_URL=${ISO_URL}
-K8S_VERSION=${K8S_VERSION}
-BUILD_NAME=${BUILD_NAME}
+ISO_URL=${ISO_PUBLISH_BASE}/${ISO_NAME}
+BUILD_NAME=${CT}
 EOF
 log "Build outputs:"; cat "${WORKDIR}/outputs.env"
