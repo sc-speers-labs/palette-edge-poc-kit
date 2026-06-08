@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
-# Delete the ephemeral edge VM (the persistent LXD host stays). For test loops.
+# Delete the ephemeral edge VM + its imported ISO volume (the persistent LXD host stays).
 set -euo pipefail
 source "$(dirname "$0")/lib.sh" >/dev/null 2>&1 || true
 : "${WORKDIR:=$(pwd)/build}"
+source "${WORKDIR}/lxd.env"   # LXD_CONF / remote
 source "${WORKDIR}/vm.env"
-log "Deleting edge VM ${VM_NAME}"
-lxc delete "${VM_NAME}" --force --project default || true
+export LXD_CONF
+log "Deleting edge VM ${VM_NAME} and ISO volume ${ISO_VOL:-none}"
+lxc delete "${VM_NAME}" --force || true
+[[ -n "${ISO_VOL:-}" ]] && lxc storage volume delete "${LXD_POOL:-default}" "${ISO_VOL}" || true

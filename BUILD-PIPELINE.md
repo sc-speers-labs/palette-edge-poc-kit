@@ -57,15 +57,25 @@ kubectl label namespace edgeforge-build pod-security.kubernetes.io/enforce=privi
 | `lxd-client-crt` / `lxd-client-key` | secret file | Jenkins' LXD client cert (trusted on the LXD host) |
 
 ### 3. Env / job constants to fill (`TODO`s)
-- `LXD_HOST_SYSTEM_ID` — MaaS system_id of the dedicated LXD host
 - `PALETTE_PROJECT_UID` — project to scope registration polling
 - `ISO_PUBLISH_BASE` + `ci_publish_iso.sh` — where/how the ISO is served to the LXD host
-- `LXD_ENDPOINT` / `MAAS_API` — defaulted in the Jenkinsfile; adjust to your hosts
+- `MAAS_API` — defaulted in the Jenkinsfile; adjust to your host
+- `LXD_HOST_TAG` — MaaS tag marking the role-holder (default `lxd-host`); optional `LXD_HOST_POOL` to
+  restrict new candidates; optional `LXD_HOST_SYSTEM_ID` to pin one machine
+- Pre-create the MaaS tag once: `maas <profile> tags create name=lxd-host`
 
-### 4. LXD host (persistent, self-healing)
-Deployed once by MaaS via `ci/cloud-init-lxd.yaml`. You may **release it in MaaS manually** anytime —
-`ci/maas-ensure-lxd-host.sh` reconciles it back (re-deploy / power-on / restart daemon) on the next run.
-`FORCE_REPROVISION=true` forces a clean rebuild.
+### 4. LXD host (persistent, self-healing, selected by ROLE)
+The host is **any** MaaS machine tagged `lxd-host` — not a fixed box. Each run,
+`ci/maas-ensure-lxd-host.sh` **discovers** the current holder and its IP from MaaS
+(**endpoint resolved per-run — no DNS alias**):
+- a tagged, Deployed machine whose LXD API is healthy → **reuse it**;
+- otherwise → **claim a `Ready` candidate** (optionally from `LXD_HOST_POOL`), deploy LXD via
+  `ci/cloud-init-lxd.yaml`, and tag it so future runs find it.
+
+So you can **release the role-holder in MaaS anytime** — the next run picks a healthy host or
+provisions a fresh one. `FORCE_REPROVISION=true` forces a rebuild. The stage writes `build/lxd.env`
+(endpoint + `lxc` remote) for the deploy/teardown stages. The Jenkins **client cert must be trusted
+on the host** — bootstrap that in `ci/cloud-init-lxd.yaml` (TODO).
 
 ## Scripts (`ci/`)
 | Script | Stage | Contract |
@@ -73,8 +83,8 @@ Deployed once by MaaS via `ci/cloud-init-lxd.yaml`. You may **release it in MaaS
 | `lib.sh` | Preflight | reachability checks; `dump_vm_console` on failure |
 | `render-config.sh` | Render | bundle/paste → `build/{arg,user-data,byoos.yaml}`; secret substitution |
 | `build-canvos.sh` | Build | CanvOS build → ttl.sh image + published ISO → `build/outputs.env` |
-| `maas-ensure-lxd-host.sh` | Ensure LXD host | idempotent MaaS reconcile of the persistent host |
-| `lxd-launch-edge.sh` | Deploy | empty LXD VM + attach ISO + boot → `build/vm.env` |
+| `maas-ensure-lxd-host.sh` | Ensure LXD host | discover tagged host (or claim a `Ready` candidate); resolve endpoint → `build/lxd.env` |
+| `lxd-launch-edge.sh` | Deploy | import ISO to remote pool + empty LXD VM + attach + boot → `build/vm.env` |
 | `wait-palette-register.sh` | Verify | poll Palette API until the host registers |
 | `lxd-teardown.sh` | Teardown | delete the ephemeral VM |
 

@@ -1,31 +1,39 @@
 #!/usr/bin/env bash
-# Launch an ephemeral edge host AS an LXD VM: empty VM -> attach the built installer
-# ISO -> boot. The Edge installer lays down the immutable OS and self-registers into
-# Palette via the token baked into user-data. Writes build/vm.env.
+# Launch an ephemeral edge host AS an LXD VM on the discovered remote host: empty VM
+# -> attach the built installer ISO -> boot. The Edge installer lays down the immutable
+# OS and self-registers into Palette via the token in user-data. Writes build/vm.env.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh" >/dev/null 2>&1 || true
 : "${WORKDIR:=$(pwd)/build}"
 source "${WORKDIR}/outputs.env"
+source "${WORKDIR}/lxd.env"          # LXD_ENDPOINT, LXD_REMOTE, LXD_CONF (from ensure stage)
+export LXD_CONF
 : "${ISO_URL:?}" ; : "${BUILD_NAME:?}"
+: "${LXD_POOL:=default}"
 : "${VM_CORES:=4}" ; : "${VM_MEM:=8GiB}" ; : "${VM_DISK:=60GiB}"
 VM_NAME="edge-${BUILD_NAME}-${BUILD_NUMBER:-manual}"
-
-# Use the remote LXD endpoint configured with this Jenkins client cert.
-export LXD_CONF="${WORKDIR}/.lxd"   # holds the client cert/remote (set up in BUILD-PIPELINE.md)
+ISO_VOL="${VM_NAME}-iso"
 
 log "Fetching ISO ${ISO_URL}"
 curl -fsSL -o "${WORKDIR}/installer.iso" "${ISO_URL}"
 
-log "Creating LXD VM ${VM_NAME} (${VM_CORES}c/${VM_MEM}/${VM_DISK})"
+# The LXD host is remote, so a client-local path can't be used as a disk source.
+# Import the ISO as a custom volume (uploads it to the remote pool), then attach it.
+log "Importing ISO into LXD pool '${LXD_POOL}' as ${ISO_VOL}"
+lxc storage volume import "${LXD_POOL}" "${WORKDIR}/installer.iso" "${ISO_VOL}" --type=iso
+
+log "Creating LXD VM ${VM_NAME} (${VM_CORES}c/${VM_MEM}/${VM_DISK}) on ${LXD_REMOTE}"
 lxc init "${VM_NAME}" --empty --vm \
   -c limits.cpu="${VM_CORES}" -c limits.memory="${VM_MEM}" \
-  -d root,size="${VM_DISK}" --project default
-# Attach the installer ISO and make it boot first.
+  -d root,size="${VM_DISK}" --storage "${LXD_POOL}"
+# Attach the imported ISO and make it boot first.
 lxc config device add "${VM_NAME}" installer disk \
-  source="${WORKDIR}/installer.iso" boot.priority=10 --project default
-lxc start "${VM_NAME}" --project default
+  pool="${LXD_POOL}" source="${ISO_VOL}" boot.priority=10
+lxc start "${VM_NAME}"
 
 cat > "${WORKDIR}/vm.env" <<EOF
 VM_NAME=${VM_NAME}
+ISO_VOL=${ISO_VOL}
+LXD_POOL=${LXD_POOL}
 EOF
 log "Edge VM ${VM_NAME} booting the installer."

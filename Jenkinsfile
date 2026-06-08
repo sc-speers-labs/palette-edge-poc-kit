@@ -31,8 +31,14 @@ pipeline {
     REGISTRATION_TOKEN  = credentials('edge-registration-token')
     OS_PASSWORD         = credentials('os-password')
     TTLSH_NAMESPACE     = credentials('ttlsh-namespace')
-    // LXD client cert/key + endpoint provided as files/strings — see BUILD-PIPELINE.md
-    LXD_ENDPOINT        = 'https://lxd-host.cabin:8443'
+    // LXD client cert/key (secret files) — already trusted on the LXD host.
+    LXD_CLIENT_CRT      = credentials('lxd-client-crt')
+    LXD_CLIENT_KEY      = credentials('lxd-client-key')
+    // The LXD host is selected by ROLE, not identity: any Deployed machine tagged
+    // LXD_HOST_TAG. Its endpoint is discovered from MaaS each run (no DNS alias).
+    LXD_HOST_TAG        = 'lxd-host'
+    // LXD_HOST_POOL    = '<pool>'  // optional: restrict new candidates to a MaaS pool
+    // LXD_HOST_SYSTEM_ID = '<id>'  // optional override: pin to one specific machine
     MAAS_API            = 'http://homelab.cabin:5240/MAAS/api/2.0'
     WORKDIR             = "${WORKSPACE}/build"
   }
