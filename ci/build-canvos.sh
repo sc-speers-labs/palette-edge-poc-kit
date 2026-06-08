@@ -5,6 +5,7 @@
 # Writes build/outputs.env with IMAGE_REF and ISO_URL for downstream stages.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh" >/dev/null 2>&1 || true
+CI_DIR="$(cd "$(dirname "$0")" && pwd)"
 : "${WORKDIR:=$(pwd)/build}"
 : "${CANVOS_VERSION:=v4.9.10}"
 : "${BUILD_NAME:=poc}"
@@ -36,15 +37,17 @@ pushd "${SRC}" >/dev/null
     --OS_VERSION="${OS_VERSION}"
   # Provider image -> ttl.sh
   docker push "${IMAGE_REF}"
-  # Installer ISO -> HTTP location the LXD host can reach (TODO: set ISO_PUBLISH_BASE).
+  # Locate the installer ISO produced by the build.
   ISO_LOCAL="$(ls build/*.iso 2>/dev/null | head -1 || true)"
   [[ -n "${ISO_LOCAL}" ]] || die "No ISO produced by CanvOS build"
-  ISO_NAME="palette-edge-${BUILD_NAME}.iso"
-  ISO_URL="${ISO_PUBLISH_BASE:-http://homelab.cabin/edge-iso}/${ISO_NAME}"
-  # TODO: replace with your publish mechanism (rclone/scp/minio). Placeholder:
-  ./ci_publish_iso.sh "${ISO_LOCAL}" "${ISO_NAME}" 2>/dev/null \
-    || log "WARN: ISO publish step is a TODO — wire ISO_PUBLISH_BASE + ci_publish_iso.sh"
+  ISO_ABS="$(pwd)/${ISO_LOCAL}"
 popd >/dev/null
+
+# Publish the ISO to the shared edge-iso volume (served by in-cluster nginx).
+: "${ISO_PUBLISH_BASE:=http://edge-iso.cabin}"
+ISO_NAME="palette-edge-${BUILD_NAME}.iso"
+"${CI_DIR}/ci_publish_iso.sh" "${ISO_ABS}" "${ISO_NAME}"
+ISO_URL="${ISO_PUBLISH_BASE}/${ISO_NAME}"
 
 cat > "${WORKDIR}/outputs.env" <<EOF
 IMAGE_REF=${IMAGE_REF}

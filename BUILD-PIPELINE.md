@@ -44,6 +44,9 @@ The cluster enforces PodSecurity **baseline** by default, so the Earthly pod nee
 ```
 kubectl create namespace edgeforge-build
 kubectl label namespace edgeforge-build pod-security.kubernetes.io/enforce=privileged
+
+# In-cluster ISO file server (edge-iso RWX PVC + nginx + ingress edge-iso.cabin)
+kubectl apply -f ci/iso-fileserver.yaml
 ```
 
 ### 2. Jenkins credentials (IDs referenced by the Jenkinsfile)
@@ -56,13 +59,13 @@ kubectl label namespace edgeforge-build pod-security.kubernetes.io/enforce=privi
 | `ttlsh-namespace` | secret text | ttl.sh namespace for the provider image |
 | `lxd-client-crt` / `lxd-client-key` | secret file | Jenkins' LXD client cert + key. The **public cert is baked into `ci/cloud-init-lxd.yaml`**, so a provisioned host trusts it automatically; the **key stays only in Jenkins** |
 
-### 3. Env / job constants to fill (`TODO`s)
-- `PALETTE_PROJECT_UID` — project to scope registration polling
-- `ISO_PUBLISH_BASE` + `ci_publish_iso.sh` — where/how the ISO is served to the LXD host
-- `MAAS_API` — defaulted in the Jenkinsfile; adjust to your host
-- `LXD_HOST_TAG` — MaaS tag marking the role-holder (default `lxd-host`); optional `LXD_HOST_POOL` to
-  restrict new candidates; optional `LXD_HOST_SYSTEM_ID` to pin one machine
-- Pre-create the MaaS tag once: `maas <profile> tags create name=lxd-host`
+### 3. Config — mostly wired (defaults in the Jenkinsfile)
+- ✅ `PALETTE_API` / `PALETTE_PROJECT_UID` — default to **cust-eng / SA-Dan-Speers**
+- ✅ `MAAS_API` — `http://homelab.cabin:5240/MAAS/api/2.0`; `maas()` builds the OAuth1 header from `MAAS_OAUTH`
+- ✅ `LXD_HOST_TAG=lxd-host` — the MaaS tag is **created**; optional `LXD_HOST_POOL` / `LXD_HOST_SYSTEM_ID` overrides
+- ✅ ISO serving — in-cluster nginx + RWX PVC (`ci/iso-fileserver.yaml`, **deployed**); `ISO_PUBLISH_BASE` defaults to `http://edge-iso.cabin` (resolves via the `*.cabin` wildcard → ingress VIP)
+- ⬜ **Earthly build targets** in `ci/build-canvos.sh` — pin the real `+build-*` target/args for CanvOS `v4.9.10`
+- ⬜ **Pick a healthy LXD-host machine** — tag it `lxd-host`, or let the selector claim a `Ready` one (only `major-wolf` is Ready, and it's flaky — consider freeing a healthy worker, not `superb-emu`)
 
 ### 4. LXD host (persistent, self-healing, selected by ROLE)
 The host is **any** MaaS machine tagged `lxd-host` — not a fixed box. Each run,

@@ -21,8 +21,12 @@ spec:
         requests: { cpu: "4", memory: "6Gi", ephemeral-storage: "30Gi" }
         limits:   { cpu: "8", memory: "12Gi", ephemeral-storage: "60Gi" }
       volumeMounts:
-        - { name: scratch, mountPath: /workspace-scratch }
+        - { name: scratch,  mountPath: /workspace-scratch }
+        - { name: edge-iso, mountPath: /edge-iso }   # publish target for the built ISO
   volumes:
     # Longhorn PVC (or emptyDir) for build scratch; emptyDir uses node ephemeral storage.
     - name: scratch
       emptyDir: { sizeLimit: 50Gi }
+    # Shared RWX volume the nginx file server serves from (ci/iso-fileserver.yaml).
+    - name: edge-iso
+      persistentVolumeClaim: { claimName: edge-iso }
