@@ -54,7 +54,7 @@ kubectl label namespace edgeforge-build pod-security.kubernetes.io/enforce=privi
 | `edge-registration-token` | secret text | Edge host registration token |
 | `os-password` | secret text | OS password injected into user-data |
 | `ttlsh-namespace` | secret text | ttl.sh namespace for the provider image |
-| `lxd-client-crt` / `lxd-client-key` | secret file | Jenkins' LXD client cert (trusted on the LXD host) |
+| `lxd-client-crt` / `lxd-client-key` | secret file | Jenkins' LXD client cert + key. The **public cert is baked into `ci/cloud-init-lxd.yaml`**, so a provisioned host trusts it automatically; the **key stays only in Jenkins** |
 
 ### 3. Env / job constants to fill (`TODO`s)
 - `PALETTE_PROJECT_UID` — project to scope registration polling
@@ -74,8 +74,8 @@ The host is **any** MaaS machine tagged `lxd-host` — not a fixed box. Each run
 
 So you can **release the role-holder in MaaS anytime** — the next run picks a healthy host or
 provisions a fresh one. `FORCE_REPROVISION=true` forces a rebuild. The stage writes `build/lxd.env`
-(endpoint + `lxc` remote) for the deploy/teardown stages. The Jenkins **client cert must be trusted
-on the host** — bootstrap that in `ci/cloud-init-lxd.yaml` (TODO).
+(endpoint + `lxc` remote) for the deploy/teardown stages. The Jenkins client cert is **baked into
+`ci/cloud-init-lxd.yaml`** (public half only) and trusted automatically when a host is provisioned.
 
 ## Scripts (`ci/`)
 | Script | Stage | Contract |

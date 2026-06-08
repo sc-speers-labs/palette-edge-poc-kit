@@ -1,0 +1,10 @@
+# Secrets — private keys must never be committed (the LXD client CERT in
+# ci/cloud-init-lxd.yaml is the public half and is intentionally tracked).
+*.key
+*.pem
+
+# Local pipeline artifacts / generator output
+build/
+.lxd/
+edge-build*.json
+installer.iso

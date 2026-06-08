@@ -23,8 +23,24 @@ write_files:
           devices:
             root: { path: /, pool: default, type: disk }
             eth0: { name: eth0, network: lxdbr0, type: nic }
+  # Jenkins' LXD client certificate (PUBLIC half — the private key stays in Jenkins).
+  # Baked in so a freshly-provisioned host trusts the pipeline automatically.
+  - path: /root/jenkins-client.crt
+    permissions: "0644"
+    content: |
+      -----BEGIN CERTIFICATE-----
+      MIIByjCCAVCgAwIBAgIUEz8fSr/0CHnESzzs0ASkNm3bW4EwCgYIKoZIzj0EAwIw
+      HDEaMBgGA1UEAwwRamVua2lucy1lZGdlZm9yZ2UwHhcNMjYwNjA4MjAzMzM5WhcN
+      MzYwNjA1MjAzMzM5WjAcMRowGAYDVQQDDBFqZW5raW5zLWVkZ2Vmb3JnZTB2MBAG
+      ByqGSM49AgEGBSuBBAAiA2IABHkefAQs8jU/fzi7Vp4vXDWWfIkKPIgKLJi8Fzq4
+      S3t/I+Afta7NPHIb0euTgUKG5Sip5YenzoZeEULS2TrzzrQUA1EcNiFgAiqZiEz4
+      qtBCBACiu7L7GAhn0ZSmW1PNwaNTMFEwHQYDVR0OBBYEFCmllbI8frbC3iAYOZg1
+      qbnayVE3MB8GA1UdIwQYMBaAFCmllbI8frbC3iAYOZg1qbnayVE3MA8GA1UdEwEB
+      /wQFMAMBAf8wCgYIKoZIzj0EAwIDaAAwZQIxAPeR0traCysjuUzRI0FdO2YTwYMO
+      U+lUU31OmNK2vcXjYg02/pTCqbxYVLR5Ynf64wIwYe1dNAhoWQMB5YCXyI3ZbNv1
+      CFdYPAvwPfk56D3duyLNcQXXo58C+DYkqJXzq5o8
+      -----END CERTIFICATE-----
 runcmd:
   - [bash, -lc, "lxd waitready && cat /root/lxd-preseed.yaml | lxd init --preseed"]
-  # TODO: add this Jenkins client cert to trust, e.g. via a one-time trust token:
-  #   lxc config trust add --name jenkins <<< "$JENKINS_CLIENT_CRT"
-  # Provide JENKINS_CLIENT_CRT through MaaS metadata or a follow-up trust-token step.
+  # Trust the Jenkins client cert (newer LXD: add-certificate; older: add).
+  - [bash, -lc, "lxc config trust add-certificate /root/jenkins-client.crt 2>/dev/null || lxc config trust add /root/jenkins-client.crt"]
