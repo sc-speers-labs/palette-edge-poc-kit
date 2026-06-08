@@ -1,0 +1,69 @@
+# In-cluster OCI registry for CanvOS provider images (persistent, semantic tags).
+# Insecure HTTP over ingress registry.cabin — the build pod pushes here and the edge
+# host pulls from here (both must treat it as an insecure registry; see BUILD-PIPELINE.md).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: registry-data
+  namespace: edgeforge-build
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 50Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: registry
+  namespace: edgeforge-build
+  labels: { app: registry }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }          # RWO PVC — never two pods attached at once
+  selector: { matchLabels: { app: registry } }
+  template:
+    metadata: { labels: { app: registry } }
+    spec:
+      containers:
+        - name: registry
+          image: registry:2.8
+          ports: [{ containerPort: 5000 }]
+          env:
+            - { name: REGISTRY_STORAGE_DELETE_ENABLED, value: "true" }   # allow GC
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/registry }
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: registry-data }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: registry
+  namespace: edgeforge-build
+spec:
+  selector: { app: registry }
+  ports: [{ port: 5000, targetPort: 5000 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: registry
+  namespace: edgeforge-build
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"      # large image layers
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "900"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: registry.cabin
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: registry
+                port: { number: 5000 }
