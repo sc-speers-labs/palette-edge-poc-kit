@@ -34,8 +34,8 @@ The generator is a static page; Jenkins is internal. Two ingestion paths, handle
 
 **Secrets:** the generated `user-data` should use `${REGISTRATION_TOKEN}` / `${OS_PASSWORD}`
 placeholders (generator "placeholder mode"). `render-config.sh` substitutes them from Jenkins
-credentials at build time, so nothing secret travels in the bundle/params. *(Generator change
-pending: bundle button + placeholder mode.)*
+credentials at build time, so nothing secret travels in the bundle/params. *(Shipped in generator
+v1.2.0: the **Download build bundle** button + **Pipeline mode — placeholder secrets** toggle.)*
 
 ## One-time setup
 

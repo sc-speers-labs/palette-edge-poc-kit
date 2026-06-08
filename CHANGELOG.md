@@ -4,6 +4,16 @@ All notable changes to this toolkit are documented here.
 
 ---
 
+## v1.2.0 — 2026-06-08
+
+Pipeline integration — build-bundle export + placeholder secrets.
+
+**Added**
+- **Download build bundle** button → `edge-build.json` (`{arg, userData, byoos, meta}`) for the Jenkins `CONFIG_BUNDLE` file param (see `BUILD-PIPELINE.md`). `meta` keys are env-var names so the build can source them directly.
+- **Pipeline mode — placeholder secrets** toggle: emits `${REGISTRATION_TOKEN}` / `${OS_PASSWORD}` in user-data so the bundle carries no secrets (Jenkins injects them at build time). Registration token + OS password become optional in this mode.
+
+---
+
 ## v1.1.0 — 2026-06-08
 
 Version refresh — bumped CanvOS and refreshed K3s options.

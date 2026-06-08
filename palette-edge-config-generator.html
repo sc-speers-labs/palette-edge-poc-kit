@@ -409,7 +409,7 @@
 
 <div class="version-banner">
   <span>PALETTE EDGE — POC CONFIG GENERATOR</span>
-  <span class="vbadge">v1.1.0</span>
+  <span class="vbadge">v1.2.0</span>
   <span class="vbadge">Built: 2026-06-08</span>
   <span class="vbadge">K3s · Ubuntu · CanvOS</span>
 </div>
@@ -537,6 +537,17 @@
         Requires exactly 2 edge hosts in Palette. The custom tag is suffixed with <code style="color:var(--amber)">-2node</code> to distinguish this image.
       </div>
 
+      <div class="toggle-row">
+        <div>
+          <div style="font-size:13px;color:var(--text);margin-bottom:2px;">Pipeline mode — placeholder secrets</div>
+          <div class="toggle-desc">Emit <code>${REGISTRATION_TOKEN}</code> / <code>${OS_PASSWORD}</code> in user-data instead of real values, so the build bundle carries no secrets (Jenkins injects them at build time). Turn off for manual / USB-stick builds.</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="secretPlaceholders" checked onchange="update()">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
     </div>
 
   </div>
@@ -547,6 +558,8 @@
     <div id="validationBar" class="validation-bar errors" style="margin:0;">
       <ul id="validationList"></ul>
     </div>
+
+    <button class="btn btn-download" id="downloadBundle" onclick="downloadBundle()" style="width:100%;margin:12px 0;padding:10px;font-weight:600;">&#11015;&nbsp; Download build bundle &nbsp;(edge-build.json &rarr; Jenkins)</button>
 
     <!-- .arg -->
     <div class="output-block">
@@ -608,19 +621,21 @@
 
   function validate() {
     const errors = [];
+    const usePlaceholders = checked('secretPlaceholders');
     const token = val('edgeHostToken');
     const tag = val('customTag');
     const password = val('osPassword');
 
-    if (!token) errors.push('Registration token is required');
+    // In pipeline/placeholder mode the token + password come from Jenkins creds, not the form.
+    if (!usePlaceholders && !token) errors.push('Registration token is required');
     if (!tag) errors.push('Custom tag is required');
-    if (!password) errors.push('OS password is required');
+    if (!usePlaceholders && !password) errors.push('OS password is required');
     if (tag && !/^[a-z0-9-]+$/.test(tag)) errors.push('Custom tag must be alphanumeric lowercase');
 
-    // token field highlight
-    document.getElementById('edgeHostToken').classList.toggle('invalid', !token);
+    // field highlights (token/password not required in placeholder mode)
+    document.getElementById('edgeHostToken').classList.toggle('invalid', !usePlaceholders && !token);
     document.getElementById('customTag').classList.toggle('invalid', !tag || !/^[a-z0-9-]+$/.test(tag));
-    document.getElementById('osPassword').classList.toggle('invalid', !password);
+    document.getElementById('osPassword').classList.toggle('invalid', !usePlaceholders && !password);
 
     const bar = document.getElementById('validationBar');
     const list = document.getElementById('validationList');
@@ -659,7 +674,7 @@
     const raw = [
       `# ──────────────────────────────────────────────────────`,
       `# Palette Edge — CanvOS build arguments`,
-      `# Generated: ${new Date().toISOString().split('T')[0]}  |  Generator v1.0.0`,
+      `# Generated: ${new Date().toISOString().split('T')[0]}  |  Generator v1.2.0`,
       `# ──────────────────────────────────────────────────────`,
       ``,
       `ARCH=amd64`,
@@ -709,9 +724,10 @@
 
   function renderUserdata() {
     const endpoint  = val('paletteEndpoint') || 'console.spectrocloud.com';
-    const token     = val('edgeHostToken') || '<your-registration-token>';
+    const usePlaceholders = checked('secretPlaceholders');
+    const token     = usePlaceholders ? '${REGISTRATION_TOKEN}' : (val('edgeHostToken') || '<your-registration-token>');
     const project   = val('projectName') || 'Default';
-    const password  = val('osPassword') || '<your-os-password>';
+    const password  = usePlaceholders ? '${OS_PASSWORD}' : (val('osPassword') || '<your-os-password>');
     const poweroff  = checked('poweroff');
 
     const raw = [
@@ -841,6 +857,38 @@
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  // Build a single bundle the Jenkins job ingests via its CONFIG_BUNDLE file param.
+  // meta keys are env-var names so ci/render-config.sh can source them directly.
+  function downloadBundle() {
+    if (!validate()) { alert('Fix the required fields before downloading the bundle.'); return; }
+    const tag = val('customTag');
+    const meta = {
+      BUILD_NAME:          tag,
+      CANVOS_VERSION:      CANVOS_VERSION,
+      K8S_DISTRIBUTION:    'k3s',
+      K8S_VERSION:         val('k3sVersion'),
+      OS_VERSION:          radio('osVersion'),
+      IMAGE_REGISTRY:      val('imageRegistry'),
+      IMAGE_REPO:          val('imageRepo'),
+      TWO_NODE:            checked('twoNode'),
+      PALETTE_ENDPOINT:    val('paletteEndpoint') || 'console.spectrocloud.com',
+      PROJECT_NAME:        val('projectName') || 'Default',
+      SECRET_PLACEHOLDERS: checked('secretPlaceholders'),
+    };
+    const bundle = {
+      arg:      getRawContent('argContent'),
+      userData: getRawContent('userdataContent'),
+      byoos:    getRawContent('byoosContent'),
+      meta:     meta,
+    };
+    const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `edge-build-${tag || 'config'}.json`;
     a.click();
     URL.revokeObjectURL(a.href);
   }
