@@ -35,4 +35,7 @@ dump_vm_console() {
   lxc console "${VM_NAME}" --show-log 2>/dev/null || true
 }
 
-"${1:?usage: lib.sh <preflight|dump_vm_console>}"
+# Dispatch only when executed directly — not when sourced for the helpers above.
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  "${1:?usage: lib.sh <preflight|dump_vm_console>}"
+fi

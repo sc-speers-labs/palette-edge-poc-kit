@@ -409,7 +409,7 @@
 
 <div class="version-banner">
   <span>PALETTE EDGE — POC CONFIG GENERATOR</span>
-  <span class="vbadge">v1.2.0</span>
+  <span class="vbadge">v1.3.0</span>
   <span class="vbadge">Built: 2026-06-08</span>
   <span class="vbadge">K3s · Ubuntu · CanvOS</span>
 </div>
@@ -491,8 +491,8 @@
 
       <div class="field">
         <label>Image Registry</label>
-        <input type="text" id="imageRegistry" value="ttl.sh" oninput="update()">
-        <div class="field-hint warn" id="ttlWarning">⚠ ttl.sh images expire after 24 hours — testing only.</div>
+        <input type="text" id="imageRegistry" value="registry.cabin" oninput="update()">
+        <div class="field-hint warn" id="ttlWarning">⚠ ttl.sh can't host CanvOS provider images — its tag must be a TTL (1h–24h), not the semantic tag the cluster pulls. Use a persistent registry.</div>
       </div>
 
       <div class="field">
@@ -504,6 +504,17 @@
         <label>Custom Tag <span class="req">required</span></label>
         <input type="text" id="customTag" value="demo" oninput="update()">
         <div class="field-hint">Alphanumeric lowercase only. e.g. <code>poc-v1</code></div>
+      </div>
+
+      <div class="toggle-row">
+        <div>
+          <div style="font-size:13px;color:var(--text);margin-bottom:2px;">Insecure registry (HTTP / no TLS)</div>
+          <div class="toggle-desc">Adds <code>stylus.registryCredentials</code> with <code>insecure: true</code> to user-data so the edge host pulls the provider image from an HTTP registry without TLS errors. Leave off for a TLS registry.</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="insecureRegistry" checked onchange="update()">
+          <span class="toggle-slider"></span>
+        </label>
       </div>
     </div>
 
@@ -674,7 +685,7 @@
     const raw = [
       `# ──────────────────────────────────────────────────────`,
       `# Palette Edge — CanvOS build arguments`,
-      `# Generated: ${new Date().toISOString().split('T')[0]}  |  Generator v1.2.0`,
+      `# Generated: ${new Date().toISOString().split('T')[0]}  |  Generator v1.3.0`,
       `# ──────────────────────────────────────────────────────`,
       ``,
       `ARCH=amd64`,
@@ -729,6 +740,8 @@
     const project   = val('projectName') || 'Default';
     const password  = usePlaceholders ? '${OS_PASSWORD}' : (val('osPassword') || '<your-os-password>');
     const poweroff  = checked('poweroff');
+    const insecureReg = checked('insecureRegistry');
+    const registry  = val('imageRegistry') || 'registry.cabin';
 
     const raw = [
       `#cloud-config`,
@@ -737,6 +750,11 @@
       `    paletteEndpoint: ${endpoint}`,
       `    edgeHostToken: ${token}`,
       `    projectName: ${project}`,
+      ...(insecureReg ? [
+      `  registryCredentials:`,
+      `    domain: ${registry}`,
+      `    insecure: true`,
+      ] : []),
       ``,
       `install:`,
       `  reboot: ${poweroff ? 'false' : 'true'}`,

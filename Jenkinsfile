@@ -65,7 +65,10 @@ pipeline {
           defaultContainer 'earthly'
         }
       }
-      steps { sh './ci/build-canvos.sh' }     // -> pushes provider image to ttl.sh, publishes ISO, writes build/outputs.env
+      steps {
+        sh 'command -v bash >/dev/null 2>&1 || apk add --no-cache bash'
+        sh './ci/build-canvos.sh'
+      }     // -> pushes provider image to ttl.sh, publishes ISO, writes build/outputs.env
     }
 
     stage('Ensure LXD host') {

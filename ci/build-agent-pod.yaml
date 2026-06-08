@@ -16,11 +16,11 @@ spec:
   # freeing a specific node back to MaaS (to become the LXD host) never strands the
   # build. The resource requests below steer it onto a big-disk node.
   #
-  # NOTE: `docker push registry.cabin/...` over plain HTTP needs the build's Docker/
-  # buildkit daemon to treat registry.cabin as insecure (e.g. dockerd
-  # --insecure-registry=registry.cabin, or buildkitd `registry."registry.cabin"`
-  # http=true). The earthly/earthly image has no dockerd — wiring a privileged Docker
-  # daemon here is the remaining build-pod task, best validated on a first real run.
+  # CanvOS provider targets use `SAVE IMAGE --push`, so build-canvos.sh runs
+  # `earthly --push` (pure buildkit — no Docker daemon) and configures buildkit to push
+  # to registry.cabin over insecure HTTP. The earthly container is privileged so its
+  # embedded buildkitd can run. If buildkit startup proves flaky as a Jenkins agent,
+  # switch to an earthly/buildkitd sidecar + EARTHLY_BUILDKIT_HOST (first-run tuning).
   containers:
     - name: earthly
       image: earthly/earthly:v0.8.15   # TODO: pin a version with docker CLI for `docker push`

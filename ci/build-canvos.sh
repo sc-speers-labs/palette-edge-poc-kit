@@ -35,11 +35,21 @@ if [[ "${REG}" == "ttl.sh" ]]; then
 fi
 
 log "Building -> ${IMAGE_REF}"
+# CanvOS provider-image targets use `SAVE IMAGE --push`, so `earthly --push` uploads
+# them — pure buildkit, no Docker daemon. CanvOS doesn't configure insecure registries,
+# so allow insecure HTTP push to our registry at the buildkit layer.
+: "${REGISTRY_INSECURE:=true}"
+if [[ "${REGISTRY_INSECURE}" == "true" ]]; then
+  log "Allowing insecure HTTP push to ${REG}"
+  earthly config global.buildkit_additional_config "[registry.\"${REG}\"]
+  http = true
+  insecure = true"
+fi
+earthly bootstrap >/dev/null 2>&1 || true     # ensure the embedded buildkitd is up
 pushd "${SRC}" >/dev/null
   # Feed every UPPER_CASE key from .arg to the orchestrator target as an Earthly build arg.
   mapfile -t EARGS < <(grep -E '^[A-Z][A-Z0-9_]*=' .arg | sed 's/^/--/')
-  earthly --allow-privileged +build-all-images "${EARGS[@]}"
-  docker push "${IMAGE_REF}"
+  earthly --allow-privileged --push +build-all-images "${EARGS[@]}"
   ISO_LOCAL="$(ls build/*.iso 2>/dev/null | head -1 || true)"
   [[ -n "${ISO_LOCAL}" ]] || die "No ISO produced by CanvOS build"
   ISO_ABS="$(pwd)/${ISO_LOCAL}"

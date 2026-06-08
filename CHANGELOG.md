@@ -4,6 +4,19 @@ All notable changes to this toolkit are documented here.
 
 ---
 
+## v1.3.0 — 2026-06-08
+
+Registry config — default to a persistent registry + insecure-registry support.
+
+**Changed**
+- Default Image Registry: `ttl.sh` → `registry.cabin` (ttl.sh can't host provider images — its tag must be a TTL, not the semantic tag the cluster pulls)
+- ttl.sh hint now explains that limitation
+
+**Added**
+- **Insecure registry (HTTP / no TLS)** toggle — emits `stylus.registryCredentials: {domain: <registry>, insecure: true}` into user-data so the edge host pulls over HTTP without TLS errors
+
+---
+
 ## v1.2.0 — 2026-06-08
 
 Pipeline integration — build-bundle export + placeholder secrets.
