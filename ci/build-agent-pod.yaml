@@ -1,43 +1,40 @@
-# Privileged Earthly/buildkit agent for the Build stage.
-# Deploys into the dedicated privileged-PSA namespace (see BUILD-PIPELINE.md).
-# Earthly brings its own buildkit, so the containerd-not-Docker node runtime is fine,
-# but it needs privileged for the nested build daemon.
+# Single agent pod for the whole pipeline — two containers sharing the workspace:
+#   tools   : alpine + (bash/jq/curl/gettext/git via the Setup stage) — runs the
+#             orchestration stages (preflight, render, verify, and the deploy stages).
+#   earthly : privileged earthly/earthly — runs the CanvOS build (pure buildkit,
+#             `earthly --push`; no Docker daemon needed).
+# The Kubernetes plugin mounts the shared workspace into every container, so build/arg
+# written by Render (tools) is visible to the Build stage (earthly) — no stash needed.
+# Deploys into the privileged edgeforge-build namespace (PSA privileged + the edge-iso PVC).
 apiVersion: v1
 kind: Pod
 metadata:
-  namespace: edgeforge-build          # must be labeled pod-security.kubernetes.io/enforce=privileged
+  namespace: edgeforge-build
 spec:
-  # Resolve the in-cluster ingress hostnames the build needs (push target + ISO publish)
-  # regardless of whether cluster DNS forwards the *.cabin zone.
+  # Resolve the in-cluster ingress hostnames (push target + ISO publish) regardless of
+  # whether cluster DNS forwards the *.cabin zone.
   hostAliases:
     - ip: "192.168.5.13"
       hostnames: ["registry.cabin", "edge-iso.cabin"]
-  # No hostname pin — let the scheduler place this on any worker with capacity, so
-  # freeing a specific node back to MaaS (to become the LXD host) never strands the
-  # build. The resource requests below steer it onto a big-disk node.
-  #
-  # CanvOS provider targets use `SAVE IMAGE --push`, so build-canvos.sh runs
-  # `earthly --push` (pure buildkit — no Docker daemon) and configures buildkit to push
-  # to registry.cabin over insecure HTTP. The earthly container is privileged so its
-  # embedded buildkitd can run. If buildkit startup proves flaky as a Jenkins agent,
-  # switch to an earthly/buildkitd sidecar + EARTHLY_BUILDKIT_HOST (first-run tuning).
   containers:
+    - name: tools
+      image: alpine:3.20
+      command: ["cat"]
+      tty: true
+      resources:
+        requests: { cpu: "200m", memory: "256Mi" }
+        limits:   { cpu: "1", memory: "1Gi" }
     - name: earthly
-      image: earthly/earthly:v0.8.15   # TODO: pin a version with docker CLI for `docker push`
+      image: earthly/earthly:v0.8.15
       command: ["cat"]
       tty: true
       securityContext:
-        privileged: true
+        privileged: true            # embedded buildkitd needs it
       resources:
         requests: { cpu: "4", memory: "6Gi", ephemeral-storage: "30Gi" }
         limits:   { cpu: "8", memory: "12Gi", ephemeral-storage: "60Gi" }
       volumeMounts:
-        - { name: scratch,  mountPath: /workspace-scratch }
-        - { name: edge-iso, mountPath: /edge-iso }   # publish target for the built ISO
+        - { name: edge-iso, mountPath: /edge-iso }   # ISO publish target (RWX, served by nginx)
   volumes:
-    # Longhorn PVC (or emptyDir) for build scratch; emptyDir uses node ephemeral storage.
-    - name: scratch
-      emptyDir: { sizeLimit: 50Gi }
-    # Shared RWX volume the nginx file server serves from (ci/iso-fileserver.yaml).
     - name: edge-iso
       persistentVolumeClaim: { claimName: edge-iso }

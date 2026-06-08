@@ -3,9 +3,14 @@
 // See BUILD-PIPELINE.md for one-time setup (privileged namespace, credentials, LXD trust).
 
 pipeline {
-  // Orchestration runs on a lightweight default agent; the Build stage overrides
-  // to a privileged Earthly pod (see that stage's agent block).
-  agent any
+  // One pod, two containers (tools + earthly) sharing the workspace. Orchestration
+  // stages run in 'tools' (default); the Build stage runs in 'earthly'.
+  agent {
+    kubernetes {
+      yamlFile 'ci/build-agent-pod.yaml'
+      defaultContainer 'tools'
+    }
+  }
 
   parameters {
     // --- Config ingestion (provide ONE of these) ---
@@ -47,6 +52,10 @@ pipeline {
   }
 
   stages {
+    stage('Setup') {
+      steps { sh 'apk add --no-cache bash jq curl gettext git' }
+    }
+
     stage('Preflight') {
       steps { sh './ci/lib.sh preflight' }
     }
@@ -56,17 +65,14 @@ pipeline {
     }
 
     stage('Build artifacts') {
-      agent {
-        kubernetes {
-          // Privileged Earthly/buildkit pod in the dedicated privileged-PSA namespace.
-          yamlFile 'ci/build-agent-pod.yaml'
-          defaultContainer 'earthly'
+      // Runs in the 'earthly' container of the shared pod; pushes the provider image
+      // to registry.cabin and publishes the ISO. Writes build/outputs.env.
+      steps {
+        container('earthly') {
+          sh 'command -v bash >/dev/null 2>&1 || apk add --no-cache bash git'
+          sh './ci/build-canvos.sh'
         }
       }
-      steps {
-        sh 'command -v bash >/dev/null 2>&1 || apk add --no-cache bash'
-        sh './ci/build-canvos.sh'
-      }     // -> pushes provider image to ttl.sh, publishes ISO, writes build/outputs.env
     }
 
     stage('Ensure LXD host') {
