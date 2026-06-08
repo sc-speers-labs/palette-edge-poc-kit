@@ -24,7 +24,7 @@ pipeline {
     string(name: 'CANVOS_VERSION',defaultValue: 'v4.9.10', description: 'CanvOS tag to build with')
 
     // --- Flow control ---
-    booleanParam(name: 'DEPLOY',            defaultValue: true,  description: 'Launch an LXD edge VM after build')
+    booleanParam(name: 'DEPLOY',            defaultValue: false, description: 'Launch an LXD edge VM after build (leave off for build-only)')
     booleanParam(name: 'FORCE_REPROVISION', defaultValue: false, description: 'Rebuild the LXD host even if healthy')
     booleanParam(name: 'TEARDOWN_VM',       defaultValue: false, description: 'Delete the edge VM after verification (ephemeral test loop)')
   }
