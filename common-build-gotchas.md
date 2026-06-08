@@ -38,7 +38,7 @@ OS_VERSION=22.04  # wrong — will cause issues
 
 ```bash
 nano k8s_version.json
-# Keep only e.g. "1.32.3" under the k3s section
+# Keep only e.g. "1.32.13" under the k3s section
 ```
 
 Then run the build normally. This reduces build time and disk usage significantly.
@@ -78,7 +78,7 @@ Note: the ISO file timestamp will show a date in 2020 — this is expected behav
 | `system.osVersion` | `OS_VERSION` |
 | `system.peVersion` | CanvOS git tag used at build time |
 
-The `system.peVersion` is the CanvOS version tag (e.g. `v4.8.8`), not the Palette version. Check the CanvOS tag you checked out with `git describe --tags`.
+The `system.peVersion` is the CanvOS version tag (e.g. `v4.9.10`), not the Palette version. Check the CanvOS tag you checked out with `git describe --tags`.
 
 ---
 

@@ -113,7 +113,7 @@ IMAGE_REGISTRY=<your-registry>    # REQUIRED — e.g. myregistry.example.com or 
 IMAGE_REPO=ubuntu
 CUSTOM_TAG=<your-tag>             # REQUIRED — alphanumeric lowercase only, e.g. prod-v1
 K8S_DISTRIBUTION=k3s
-K8S_VERSION=1.32.3                # pin to your target version; check k8s_version.json in CanvOS for supported values
+K8S_VERSION=1.32.13               # pin to your target version; check k8s_version.json in CanvOS for supported values
 ISO_NAME=palette-edge-installer
 HTTPS_PROXY=
 HTTP_PROXY=
@@ -124,7 +124,7 @@ FIPS_ENABLED=false
 
 > **Important:** Do not leave `HTTPS_PROXY`, `HTTP_PROXY`, or `PROXY_CERT_PATH` with a value if you are not using a proxy — empty is correct. If there is a `BASE_IMAGE=` line in the file, remove it entirely rather than leaving it blank, or the build will fail.
 
-> **Build output naming:** The provider image tag will follow the pattern `[IMAGE_REGISTRY]/[IMAGE_REPO]:[K8S_DISTRIBUTION]-[K8S_VERSION]-[CanvOS_version]-[CUSTOM_TAG]`. For example: `myregistry.example.com/ubuntu:k3s-1.32.3-v4.8.8-prod-v1`
+> **Build output naming:** The provider image tag will follow the pattern `[IMAGE_REGISTRY]/[IMAGE_REPO]:[K8S_DISTRIBUTION]-[K8S_VERSION]-[CanvOS_version]-[CUSTOM_TAG]`. For example: `myregistry.example.com/ubuntu:k3s-1.32.13-v4.9.10-prod-v1`
 
 > **Tip — build speed:** By default CanvOS builds provider images for every supported K3s version. To speed things up, open `k8s_version.json` in the CanvOS directory after checkout and delete all versions except the one you need before running the build.
 
@@ -277,14 +277,14 @@ ls build/
 List the built container images — the K3s image tag will include `k3s` in the name:
 ```bash
 sudo docker images
-# Example image name: myregistry.example.com/ubuntu:k3s-1.32.3-v4.8.8-prod-v1
+# Example image name: myregistry.example.com/ubuntu:k3s-1.32.13-v4.9.10-prod-v1
 ```
 
 ### Push Provider Images to Your Registry
 
 ```bash
 sudo docker push <your-registry>/<your-repo>:<tag>
-# Example: sudo docker push myregistry.example.com/ubuntu:k3s-1.32.3-v4.8.8-prod-v1
+# Example: sudo docker push myregistry.example.com/ubuntu:k3s-1.32.13-v4.9.10-prod-v1
 ```
 
 ---
@@ -337,7 +337,7 @@ options:
   system.repo: ubuntu                       # must match IMAGE_REPO in .arg
   system.k8sDistribution: k3s
   system.osName: ubuntu
-  system.peVersion: v4.8.X                  # CanvOS version tag used in your build (e.g. v4.8.8)
+  system.peVersion: v4.9.X                  # CanvOS version tag used in your build (e.g. v4.9.10)
   system.customTag: <your-tag>              # must match CUSTOM_TAG in .arg (e.g. prod-v1)
   system.osVersion: 22                      # use 22 or 24 — matches OS_VERSION in .arg
 ```

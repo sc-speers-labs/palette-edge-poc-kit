@@ -409,8 +409,8 @@
 
 <div class="version-banner">
   <span>PALETTE EDGE — POC CONFIG GENERATOR</span>
-  <span class="vbadge">v1.0.0</span>
-  <span class="vbadge">Built: 2026-05-14</span>
+  <span class="vbadge">v1.1.0</span>
+  <span class="vbadge">Built: 2026-06-08</span>
   <span class="vbadge">K3s · Ubuntu · CanvOS</span>
 </div>
 
@@ -513,10 +513,10 @@
       <div class="field">
         <label>K3s Version</label>
         <select id="k3sVersion" onchange="update()">
-          <option value="1.33.3">1.33.3 (latest)</option>
-          <option value="1.32.3" selected>1.32.3</option>
-          <option value="1.31.7">1.31.7</option>
-          <option value="1.30.9">1.30.9</option>
+          <option value="1.35.3">1.35.3 (latest)</option>
+          <option value="1.34.6">1.34.6</option>
+          <option value="1.33.10">1.33.10</option>
+          <option value="1.32.13" selected>1.32.13</option>
         </select>
         <div class="field-hint">Check <a href="https://github.com/spectrocloud/CanvOS/blob/main/k8s_version.json" target="_blank" style="color:var(--accent)">k8s_version.json</a> in CanvOS for all supported versions.</div>
       </div>
@@ -597,7 +597,7 @@
 
 <script>
   // ─── CANVOS VERSION (update this when upgrading CanvOS) ───────────────────
-  const CANVOS_VERSION = 'v4.8.8';
+  const CANVOS_VERSION = 'v4.9.10';
   // ─────────────────────────────────────────────────────────────────────────
 
   function val(id) { return document.getElementById(id).value.trim(); }
