@@ -1,0 +1,25 @@
+# Allow the Jenkins controller's ServiceAccount (jenkins-jenkins in ns jenkins) to run
+# build agent pods + mount PVCs in the privileged edgeforge-build namespace.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: jenkins-agent
+  namespace: edgeforge-build
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/exec", "pods/log", "persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "create", "delete", "deletecollection", "patch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: jenkins-agent
+  namespace: edgeforge-build
+subjects:
+  - kind: ServiceAccount
+    name: jenkins-jenkins
+    namespace: jenkins
+roleRef:
+  kind: Role
+  name: jenkins-agent
+  apiGroup: rbac.authorization.k8s.io

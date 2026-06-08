@@ -45,8 +45,10 @@ The cluster enforces PodSecurity **baseline** by default, so the Earthly pod nee
 kubectl create namespace edgeforge-build
 kubectl label namespace edgeforge-build pod-security.kubernetes.io/enforce=privileged
 
-# In-cluster ISO file server (edge-iso RWX PVC + nginx + ingress edge-iso.cabin)
-kubectl apply -f ci/iso-fileserver.yaml
+# In-cluster services + RBAC for the build agent
+kubectl apply -f ci/iso-fileserver.yaml   # ISO file server  -> edge-iso.cabin
+kubectl apply -f ci/registry.yaml         # provider registry -> registry.cabin
+kubectl apply -f ci/jenkins-rbac.yaml     # let the Jenkins SA run agent pods here
 ```
 
 ### 2. Jenkins credentials (IDs referenced by the Jenkinsfile)

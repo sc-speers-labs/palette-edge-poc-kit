@@ -46,8 +46,6 @@ pipeline {
     WORKDIR             = "${WORKSPACE}/build"
   }
 
-  options { timestamps(); ansiColor('xterm') }
-
   stages {
     stage('Preflight') {
       steps { sh './ci/lib.sh preflight' }
