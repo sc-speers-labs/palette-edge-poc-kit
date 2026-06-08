@@ -1,0 +1,30 @@
+#cloud-config
+# MaaS user-data to turn a freshly-deployed Ubuntu node into the persistent LXD host.
+# Referenced by ci/maas-ensure-lxd-host.sh on (re)deploy.
+package_update: true
+snap:
+  commands:
+    - [install, lxd, --channel=5.21/stable]
+write_files:
+  - path: /root/lxd-preseed.yaml
+    permissions: "0600"
+    content: |
+      config:
+        core.https_address: "[::]:8443"
+      networks:
+        - name: lxdbr0
+          type: bridge
+          config: { ipv4.address: auto, ipv6.address: none }
+      storage_pools:
+        - name: default
+          driver: dir            # dir keeps it simple; switch to zfs/btrfs for snapshots
+      profiles:
+        - name: default
+          devices:
+            root: { path: /, pool: default, type: disk }
+            eth0: { name: eth0, network: lxdbr0, type: nic }
+runcmd:
+  - [bash, -lc, "lxd waitready && cat /root/lxd-preseed.yaml | lxd init --preseed"]
+  # TODO: add this Jenkins client cert to trust, e.g. via a one-time trust token:
+  #   lxc config trust add --name jenkins <<< "$JENKINS_CLIENT_CRT"
+  # Provide JENKINS_CLIENT_CRT through MaaS metadata or a follow-up trust-token step.
