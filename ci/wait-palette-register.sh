@@ -5,11 +5,21 @@ set -euo pipefail
 source "$(dirname "$0")/lib.sh" >/dev/null 2>&1 || true
 : "${PALETTE_API_KEY:?}" ; : "${WORKDIR:=$(pwd)/build}"
 : "${PALETTE_API:=https://cust-eng.console.spectrocloud.com}"
-: "${PALETTE_PROJECT_UID:=6539402abeefa11ca7267d44}"   # cust-eng / SA-Dan-Speers
-source "${WORKDIR}/vm.env" 2>/dev/null || true   # VM_NAME (optional, for logging)
+[[ -f "${WORKDIR}/outputs.env" ]] && source "${WORKDIR}/outputs.env"   # PROJECT_NAME
+source "${WORKDIR}/vm.env" 2>/dev/null || true                         # VM_NAME (optional)
+: "${PROJECT_NAME:=Default}"
 TIMEOUT_MIN="${REGISTER_TIMEOUT_MIN:-25}"
 
-palette() { curl -fsS -H "ApiKey: ${PALETTE_API_KEY}" -H "ProjectUid: ${PALETTE_PROJECT_UID}" "$@"; }
+# The edge host registers into whatever project the registration token belongs to.
+# Resolve that project's NAME (from the bundle/user-data stylus.site.projectName) to its
+# UID and poll there — so verify follows the config instead of a hard-coded project.
+PROJECT_UID="$(curl -sk -m 15 -H "ApiKey: ${PALETTE_API_KEY}" "${PALETTE_API}/v1/projects?limit=200" \
+  | jq -r --arg n "${PROJECT_NAME}" '.items[]? | select(.metadata.name==$n) | .metadata.uid' | head -1)"
+[[ -n "${PROJECT_UID}" ]] || PROJECT_UID="${PALETTE_PROJECT_UID:-}"
+[[ -n "${PROJECT_UID}" ]] || die "Could not resolve Palette project '${PROJECT_NAME}' to a UID (set PALETTE_PROJECT_UID as a fallback)."
+log "Palette project '${PROJECT_NAME}' -> ${PROJECT_UID}"
+
+palette() { curl -fsS -H "ApiKey: ${PALETTE_API_KEY}" -H "ProjectUid: ${PROJECT_UID}" "$@"; }
 
 log "Waiting up to ${TIMEOUT_MIN}m for an edge host to register (VM ${VM_NAME})"
 deadline=$(( $(date +%s) + TIMEOUT_MIN*60 ))

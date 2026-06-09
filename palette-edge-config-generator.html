@@ -409,7 +409,7 @@
 
 <div class="version-banner">
   <span>PALETTE EDGE — POC CONFIG GENERATOR</span>
-  <span class="vbadge">v1.6.0</span>
+  <span class="vbadge">v1.7.0</span>
   <span class="vbadge">Built: 2026-06-08</span>
   <span class="vbadge">K3s · Ubuntu · CanvOS</span>
 </div>
@@ -515,6 +515,12 @@
           <input type="checkbox" id="insecureRegistry" checked onchange="update()">
           <span class="toggle-slider"></span>
         </label>
+      </div>
+
+      <div class="field">
+        <label>Registry IP (optional)</label>
+        <input type="text" id="registryIp" value="" oninput="update()" placeholder="e.g. 192.168.5.13">
+        <div class="field-hint">If the registry hostname isn't resolvable by the edge host's DNS (e.g. an internal <code>*.cabin</code> name), set its IP to add an <code>/etc/hosts</code> entry in user-data so the host can pull the provider image.</div>
       </div>
     </div>
 
@@ -721,7 +727,7 @@
     const raw = [
       `# ──────────────────────────────────────────────────────`,
       `# Palette Edge — CanvOS build arguments`,
-      `# Generated: ${new Date().toISOString().split('T')[0]}  |  Generator v1.6.0`,
+      `# Generated: ${new Date().toISOString().split('T')[0]}  |  Generator v1.7.0`,
       `# ──────────────────────────────────────────────────────`,
       ``,
       `ARCH=amd64`,
@@ -780,6 +786,7 @@
     const registry  = val('imageRegistry') || 'registry.cabin';
     const enableVmo = checked('enableVmo');
     const enablePiraeus = checked('enablePiraeus');
+    const registryIp = val('registryIp');
 
     const raw = [
       `#cloud-config`,
@@ -808,8 +815,13 @@
       ] : []),
       ``,
       `stages:`,
+      ...((enableVmo || registryIp) ? [`  boot:`] : []),
+      ...(registryIp ? [
+      `    - name: Resolve internal registry host`,
+      `      commands:`,
+      `        - grep -q "${registry}" /etc/hosts || echo "${registryIp} ${registry}" >> /etc/hosts`,
+      ] : []),
       ...(enableVmo ? [
-      `  boot:`,
       `    - name: Load VMO virtualization modules`,
       `      commands:`,
       `        - modprobe kvm`,

@@ -4,6 +4,16 @@ All notable changes to this toolkit are documented here.
 
 ---
 
+## v1.7.0 — 2026-06-09
+
+**Added**
+- **Registry IP (optional)** field — when set, user-data gets a `stages.boot` step adding an `/etc/hosts` entry (`<ip> <registry>`) so the edge host can resolve an internal registry name (e.g. `registry.cabin`) and pull the provider image at cluster-join. (Validated: the edge VM registers fine without it, but the internal registry name wasn't resolvable via the guest's DNS.)
+
+**Note (pipeline)**
+- `wait-palette-register.sh` now resolves the **project name** (from the bundle's `stylus.site.projectName`) to its UID via `/v1/projects` and polls that project — so verification follows whatever project the registration token belongs to, instead of a hard-coded UID.
+
+---
+
 ## v1.6.0 — 2026-06-09
 
 **Changed**
