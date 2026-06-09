@@ -1,0 +1,50 @@
+# RBAC for the Edge ops pipeline's agent pod (ci/ops-agent-pod.yaml).
+# edge-ops SA: manage/exec pods in edgeforge-build (reap stuck pods, exec registry GC) and
+# read nodes cluster-wide (inventory report). Apply once: kubectl apply -f ci/ops-rbac.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: edge-ops
+  namespace: edgeforge-build
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: edge-ops
+  namespace: edgeforge-build
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "delete"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: edge-ops
+  namespace: edgeforge-build
+subjects:
+  - { kind: ServiceAccount, name: edge-ops, namespace: edgeforge-build }
+roleRef: { kind: Role, name: edge-ops, apiGroup: rbac.authorization.k8s.io }
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: edge-ops-nodes-read
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: edge-ops-nodes-read
+subjects:
+  - { kind: ServiceAccount, name: edge-ops, namespace: edgeforge-build }
+roleRef: { kind: ClusterRole, name: edge-ops-nodes-read, apiGroup: rbac.authorization.k8s.io }

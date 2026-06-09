@@ -21,16 +21,28 @@ log "Palette project '${PROJECT_NAME}' -> ${PROJECT_UID}"
 
 palette() { curl -fsS -H "ApiKey: ${PALETTE_API_KEY}" -H "ProjectUid: ${PROJECT_UID}" "$@"; }
 
-log "Waiting up to ${TIMEOUT_MIN}m for an edge host to register (VM ${VM_NAME})"
+log "Waiting up to ${TIMEOUT_MIN}m for an edge host to register (VM ${VM_NAME:-edge})"
 deadline=$(( $(date +%s) + TIMEOUT_MIN*60 ))
 while (( $(date +%s) < deadline )); do
   # TODO: filter by the edgeHostUid embedded in user-data rather than newest.
   host="$(palette "${PALETTE_API}/v1/edgehosts?limit=20" \
-            | jq -r '.items[] | select(.status.health.state=="healthy" or .status.state=="ready") | .metadata.uid' \
+            | jq -c '[.items[] | select(.status.health.state=="healthy" or .status.state=="ready")][0] // empty' \
             | head -1 || true)"
   if [[ -n "${host}" ]]; then
-    log "Edge host registered: ${host}"
-    echo "EDGE_HOST_UID=${host}" >> "${WORKDIR}/outputs.env"
+    uid="$(jq -r '.metadata.uid'  <<<"${host}")"
+    name="$(jq -r '.metadata.name' <<<"${host}")"
+    log "Edge host registered: ${name} (${uid})"
+    echo "EDGE_HOST_UID=${uid}" >> "${WORKDIR}/outputs.env"
+    # Record artifact: lets the ops job (deregister-host) target this exact host later.
+    cat > "${WORKDIR}/deploy-record.env" <<EOF
+EDGE_HOST_UID=${uid}
+EDGE_HOST_NAME=${name}
+PROJECT_UID=${PROJECT_UID}
+PROJECT_NAME=${PROJECT_NAME}
+ISO_URL=${ISO_URL:-}
+BUILD_NAME=${BUILD_NAME:-}
+EOF
+    log "Wrote deploy-record.env:"; cat "${WORKDIR}/deploy-record.env"
     exit 0
   fi
   sleep 20

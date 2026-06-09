@@ -1,0 +1,113 @@
+// Palette Edge — ops / utility pipeline (companion to Jenkinsfile).
+// One job; the ACTION parameter selects the operation. All logic lives in ci/*.sh.
+// Cross-job handoff: the build job archives build/outputs.env (deploy inputs) and, after a
+// successful register, build/deploy-record.env (host UID/name + project). This job pulls
+// them with copyArtifacts so deploy-existing / deregister-host need no hand-typed values.
+// See BUILD-PIPELINE.md for setup (kubectl apply -f ci/ops-rbac.yaml + a 2nd pipeline job).
+
+pipeline {
+  agent none
+
+  parameters {
+    choice(name: 'ACTION',
+           choices: ['report', 'deploy-existing', 'deregister-host', 'gc-registry', 'prune-isos', 'reap-pods'],
+           description: 'report: read-only inventory. deploy-existing: boot a prior build\'s ISO and verify it registers. deregister-host: delete an edge host from Palette. gc-registry / prune-isos / reap-pods: cleanup (honor DRY_RUN).')
+    string(name: 'SOURCE_BUILD', defaultValue: 'lastSuccessful',
+           description: '[deploy-existing / deregister-host] Build # of "Build Edge Images and Test" to pull artifacts from, or "lastSuccessful".')
+    string(name: 'ISO_URL', defaultValue: '',
+           description: '[deploy-existing] Override the ISO URL (default: from the source build artifact).')
+    string(name: 'PROJECT_NAME', defaultValue: '',
+           description: '[deploy-existing / deregister-host] Override the target Palette project (default: from the artifact).')
+    string(name: 'HOST_UID', defaultValue: '',
+           description: '[deregister-host] Edge host UID to delete (default: from the source build deploy-record).')
+    string(name: 'HOST_NAME', defaultValue: '',
+           description: '[deregister-host] Edge host name to delete, resolved to a UID (used when HOST_UID is empty).')
+    string(name: 'KEEP_ISOS', defaultValue: '5',
+           description: '[prune-isos] Keep this many newest ISOs; delete the rest.')
+    booleanParam(name: 'DRY_RUN', defaultValue: true,
+           description: '[deregister-host / gc-registry / prune-isos / reap-pods] Show what would change without doing it.')
+  }
+
+  environment {
+    PALETTE_API_KEY     = credentials('palette-api-key')
+    PALETTE_API         = 'https://cust-eng.console.spectrocloud.com'
+    PALETTE_PROJECT_UID = '6539402abeefa11ca7267d44'
+    REGISTRY_VIP        = '192.168.5.13'
+    WORKDIR             = "${WORKSPACE}/build"
+    BUILD_JOB           = 'Spectro Cloud/Build Edge Images and Test'
+  }
+
+  stages {
+    stage('Report') {
+      when { expression { params.ACTION == 'report' } }
+      agent { kubernetes { yamlFile 'ci/ops-agent-pod.yaml'; defaultContainer 'ops' } }
+      steps {
+        sh 'apk add --no-cache bash curl jq coreutils >/dev/null 2>&1 || true'
+        sh './ci/ops-report.sh'
+      }
+    }
+
+    stage('Deploy existing') {
+      when { expression { params.ACTION == 'deploy-existing' } }
+      agent { kubernetes { yamlFile 'ci/qemu-agent-pod.yaml'; defaultContainer 'qemu' } }
+      steps {
+        sh 'apk add --no-cache bash qemu-system-x86_64 qemu-img curl jq >/dev/null'
+        copyArtifacts(projectName: env.BUILD_JOB, filter: 'build/*.env', target: '.', optional: true,
+                      selector: params.SOURCE_BUILD == 'lastSuccessful' ? lastSuccessful() : specificBuild(params.SOURCE_BUILD))
+        sh '''
+          mkdir -p build; touch build/outputs.env
+          if [ -n "${ISO_URL}" ];      then sed -i '/^ISO_URL=/d'      build/outputs.env; echo "ISO_URL=${ISO_URL}"           >> build/outputs.env; fi
+          if [ -n "${PROJECT_NAME}" ]; then sed -i '/^PROJECT_NAME=/d' build/outputs.env; echo "PROJECT_NAME=${PROJECT_NAME}" >> build/outputs.env; fi
+          echo "--- deploy inputs ---"; cat build/outputs.env
+        '''
+        sh './ci/qemu-launch-edge.sh'
+        sh './ci/wait-palette-register.sh'
+      }
+      post {
+        failure { sh './ci/lib.sh dump_vm_console || true' }
+        always  {
+          archiveArtifacts artifacts: 'build/deploy-record.env', allowEmptyArchive: true
+          sh './ci/qemu-teardown.sh || true'
+        }
+      }
+    }
+
+    stage('Deregister host') {
+      when { expression { params.ACTION == 'deregister-host' } }
+      agent { kubernetes { yamlFile 'ci/ops-agent-pod.yaml'; defaultContainer 'ops' } }
+      steps {
+        sh 'apk add --no-cache bash curl jq coreutils >/dev/null 2>&1 || true'
+        copyArtifacts(projectName: env.BUILD_JOB, filter: 'build/deploy-record.env', target: '.', optional: true,
+                      selector: params.SOURCE_BUILD == 'lastSuccessful' ? lastSuccessful() : specificBuild(params.SOURCE_BUILD))
+        sh './ci/deregister-host.sh'
+      }
+    }
+
+    stage('GC registry') {
+      when { expression { params.ACTION == 'gc-registry' } }
+      agent { kubernetes { yamlFile 'ci/ops-agent-pod.yaml'; defaultContainer 'ops' } }
+      steps {
+        sh 'apk add --no-cache bash curl jq coreutils >/dev/null 2>&1 || true'
+        sh './ci/gc-registry.sh'
+      }
+    }
+
+    stage('Prune ISOs') {
+      when { expression { params.ACTION == 'prune-isos' } }
+      agent { kubernetes { yamlFile 'ci/ops-agent-pod.yaml'; defaultContainer 'ops' } }
+      steps {
+        sh 'apk add --no-cache bash curl jq coreutils >/dev/null 2>&1 || true'
+        sh './ci/prune-isos.sh'
+      }
+    }
+
+    stage('Reap pods') {
+      when { expression { params.ACTION == 'reap-pods' } }
+      agent { kubernetes { yamlFile 'ci/ops-agent-pod.yaml'; defaultContainer 'ops' } }
+      steps {
+        sh 'apk add --no-cache bash curl jq coreutils >/dev/null 2>&1 || true'
+        sh './ci/reap-pods.sh'
+      }
+    }
+  }
+}

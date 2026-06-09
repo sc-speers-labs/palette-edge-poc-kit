@@ -80,8 +80,31 @@ territory.
 | `render-config.sh` | Render | bundle/paste → `build/{arg,user-data,byoos.yaml}`; secret substitution |
 | `build-canvos.sh` | Build | CanvOS build → `docker push` provider image → publish ISO → `build/outputs.env` |
 | `qemu-launch-edge.sh` | Deploy | fetch ISO, boot it as a QEMU/KVM VM (`-boot order=dc`) |
-| `wait-palette-register.sh` | Verify | poll Palette API until the edge host registers |
+| `wait-palette-register.sh` | Verify | poll Palette until the host registers; write `outputs.env`/`deploy-record.env` |
 | `qemu-teardown.sh` | Teardown | stop the VM, remove disk/ISO |
+
+## Ops / utility job (`Jenkinsfile.ops`)
+A **second pipeline job** pointed at `Jenkinsfile.ops` handles everything around a build's
+lifecycle. One job; the **`ACTION`** parameter selects the operation. It reuses the build's
+`ci/*.sh` and a lightweight agent (`ci/ops-agent-pod.yaml`, runs as the `edge-ops` SA).
+
+| `ACTION` | Does | Agent | Notes |
+|---|---|---|---|
+| `report` | Read-only inventory: KVM nodes, agent pods, registry repos/tags + PVC, ISOs + PVC, Palette edge hosts per project | ops | — |
+| `deploy-existing` | Boot a **prior build's** ISO → register (no rebuild). `SOURCE_BUILD` picks the build; `ISO_URL`/`PROJECT_NAME` override | qemu | needs Copy Artifact plugin |
+| `deregister-host` | Delete an edge host from Palette (`HOST_UID`/`HOST_NAME`, or from the build's `deploy-record.env`) | ops | needs Copy Artifact plugin (unless UID/NAME given); `DRY_RUN` |
+| `gc-registry` | `registry garbage-collect -m` to reclaim untagged/orphaned blobs | ops | `DRY_RUN` |
+| `prune-isos` | Keep the `KEEP_ISOS` newest ISOs on the PVC, delete the rest | ops | `DRY_RUN` |
+| `reap-pods` | Delete Failed/Succeeded + stuck-Pending agent pods (never Running) | ops | `DRY_RUN` |
+
+**Cross-job artifacts:** the build job archives `build/outputs.env` (deploy inputs) and, after a
+successful register, `build/deploy-record.env` (host UID/name + project). `deploy-existing` and
+`deregister-host` pull them with `copyArtifacts` (`SOURCE_BUILD` = build # or `lastSuccessful`), so
+no values are hand-typed. Destructive actions default to **`DRY_RUN=true`**.
+
+**Setup:** `kubectl apply -f ci/ops-rbac.yaml`; install the **Copy Artifact** plugin (separate from
+core `archiveArtifacts`; only `deploy-existing`/`deregister-host` need it); add a 2nd Pipeline job
+(same repo, `Script Path: Jenkinsfile.ops`) with the same three credentials as the build job.
 
 ## Notes
 - The deploy VM needs only **outbound internet** (QEMU slirp NAT) to register with Palette. The

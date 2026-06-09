@@ -1,0 +1,26 @@
+# Lightweight ops/utility agent for the Edge ops pipeline (Jenkinsfile.ops).
+# kubectl + curl + jq; mounts the edge-iso PVC read-write so it can prune old ISOs. Runs as
+# the edge-ops ServiceAccount (ci/ops-rbac.yaml) so its kubectl can exec/delete in this ns.
+# Not privileged, no /dev/kvm — deploy-existing uses the qemu pod instead.
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: edgeforge-build
+spec:
+  serviceAccountName: edge-ops
+  hostAliases:
+    - ip: "192.168.5.13"
+      hostnames: ["edge-iso.cabin", "registry.cabin"]
+  containers:
+    - name: ops
+      image: alpine/k8s:1.31.1            # bundles kubectl; curl/jq present, bash+coreutils via apk
+      command: ["cat"]
+      tty: true
+      resources:
+        requests: { cpu: "200m", memory: "256Mi" }
+        limits:   { cpu: "1",    memory: "512Mi" }
+      volumeMounts:
+        - { name: iso, mountPath: /edge-iso }    # RWX PVC — safe to mount alongside the nginx server
+  volumes:
+    - name: iso
+      persistentVolumeClaim: { claimName: edge-iso }

@@ -73,7 +73,11 @@ pipeline {
       }
       post {
         failure { sh './ci/lib.sh dump_vm_console || true' }
-        always  { sh './ci/qemu-teardown.sh || true' }
+        always  {
+          // deploy-record.env (host UID/name + project) lets the ops job deregister later.
+          archiveArtifacts artifacts: 'build/deploy-record.env', allowEmptyArchive: true
+          sh './ci/qemu-teardown.sh || true'
+        }
       }
     }
   }
