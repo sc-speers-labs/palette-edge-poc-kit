@@ -1,99 +1,86 @@
 # Build + Deploy Pipeline (Part 2)
 
-Takes the [config generator](palette-edge-config-generator.html)'s output and **builds + deploys** an
-edge host end-to-end: Jenkins (cabin `ds-hl-mb7` cluster) builds CanvOS artifacts →
-pushes the provider image to ttl.sh → boots the installer as an **LXD VM** →
-the host self-registers into Palette.
+Takes the [config generator](palette-edge-config-generator.html)'s output and **builds + deploys**
+an edge host end-to-end on the cabin `ds-hl-mb7` cluster: CanvOS build → push the provider image to
+the in-cluster registry → publish the installer ISO → boot it as a **QEMU/KVM VM in a pod** → the
+host registers into Palette. No LXD, no operator, no separate VM host.
 
-> Field/community material — not official Spectro Cloud docs. Status: **scaffold**, env-specific
-> bits marked `TODO` are not yet wired.
+> Field/community material — not official Spectro Cloud docs.
 
 ## Flow
 
 ```
-generator (browser)                Jenkins job (declarative)                cabin lab
-─────────────────      ─────────────────────────────────────────      ──────────────────
-Download bundle  ─►   Render ─► Build(privileged Earthly pod) ─►  ttl.sh (provider image)
-  edge-build.json       │            │                                    │
-  (or paste params)     │            └─► installer ISO ──────────────────►│  (HTTP publish)
-                        ▼                                                  ▼
-                  Ensure LXD host (idempotent reconcile via MaaS) ─► LXD VM boots ISO
-                        ▼                                                  ▼
-                  Verify ◄──────────── Palette API ◄──────── host self-registers
+generator (browser)          Jenkins job (declarative, in-cluster)
+─────────────────     ──────────────────────────────────────────────────────
+Copy build bundle  ─►  Render ─► Build (tools+dind pod) ─► registry.cabin (provider image)
+  edge-build.json         │            │
+  (or paste params)       │            └─► installer ISO ─────────► edge-iso.cabin (nginx)
+                          ▼                                                │
+                  Deploy & verify (qemu pod + /dev/kvm) ── fetch + boot ◄──┘
+                          │  -boot order=dc: install → reboot → installed OS boots
+                          ▼
+                  Palette API ◄──── edge host self-registers (cust-eng / SA-Dan-Speers)
 ```
 
-## How config gets in (answers "how do .arg/user-data reach the build")
+## How config gets in
+Jenkins is internal and a file upload can't reach a k8s agent, so the bundle is **pasted text**:
+1. **Bundle (preferred):** generator's **Copy build bundle** button → paste into the **`CONFIG_BUNDLE`** text param.
+2. **Paste (fallback):** `ARG_CONTENT` / `USERDATA_CONTENT` text params.
 
-The generator is a static page; Jenkins is internal. Two ingestion paths, handled by
-`ci/render-config.sh`:
-
-1. **Bundle (preferred):** generator's *Download build bundle* button → `edge-build.json`
-   (`{arg, userData, byoos, meta:{...}}`) → uploaded to the job's **`CONFIG_BUNDLE`** file parameter.
-2. **Paste (fallback):** copy the generator's outputs into the **`ARG_CONTENT`/`USERDATA_CONTENT`**
-   text params.
-
-**Secrets:** the generated `user-data` should use `${REGISTRATION_TOKEN}` / `${OS_PASSWORD}`
-placeholders (generator "placeholder mode"). `render-config.sh` substitutes them from Jenkins
-credentials at build time, so nothing secret travels in the bundle/params. *(Shipped in generator
-v1.2.0: the **Download build bundle** button + **Pipeline mode — placeholder secrets** toggle.)*
+`render-config.sh` accepts the bundle as inline JSON. Secrets ride as `${REGISTRATION_TOKEN}` /
+`${OS_PASSWORD}` placeholders (generator placeholder mode) and are substituted from Jenkins
+credentials at render time — nothing secret travels in the bundle.
 
 ## One-time setup
 
-### 1. Privileged build namespace
-The cluster enforces PodSecurity **baseline** by default, so the Earthly pod needs a privileged ns:
+### 1. Namespace + in-cluster services
+The cluster enforces baseline PodSecurity, so the build/deploy pods need a privileged namespace:
 ```
 kubectl create namespace edgeforge-build
 kubectl label namespace edgeforge-build pod-security.kubernetes.io/enforce=privileged
-
-# In-cluster services + RBAC for the build agent
-kubectl apply -f ci/iso-fileserver.yaml   # ISO file server  -> edge-iso.cabin
-kubectl apply -f ci/registry.yaml         # provider registry -> registry.cabin
-kubectl apply -f ci/build-dind-config.yaml # dind insecure-registry config
-kubectl apply -f ci/jenkins-rbac.yaml     # let the Jenkins SA run agent pods here
+kubectl apply -f ci/iso-fileserver.yaml     # ISO server    -> edge-iso.cabin
+kubectl apply -f ci/registry.yaml           # provider reg  -> registry.cabin (insecure HTTP)
+kubectl apply -f ci/build-dind-config.yaml  # dind insecure-registry config
+kubectl apply -f ci/jenkins-rbac.yaml       # Jenkins SA can run agent pods in this ns
 ```
 
-### 2. Jenkins credentials (IDs referenced by the Jenkinsfile)
+### 2. Jenkins credentials
 | ID | Type | Purpose |
 |---|---|---|
-| `maas-oauth` | secret text | MaaS OAuth key (`reference_homelab_creds` recipe) |
-| `palette-api-key` | secret text | Palette API key |
-| `edge-registration-token` | secret text | Edge host registration token |
-| `os-password` | secret text | OS password injected into user-data |
-| `ttlsh-namespace` | secret text | ttl.sh namespace for the provider image |
-| `lxd-client-crt` / `lxd-client-key` | secret file | Jenkins' LXD client cert + key. The **public cert is baked into `ci/cloud-init-lxd.yaml`**, so a provisioned host trusts it automatically; the **key stays only in Jenkins** |
+| `palette-api-key` | secret text | Palette API key (cust-eng) |
+| `edge-registration-token` | secret text | Edge host registration token (scoped to SA-Dan-Speers) |
+| `os-password` | secret text | OS (`kairos` user) password injected into user-data |
 
-### 3. Config — mostly wired (defaults in the Jenkinsfile)
-- ✅ `PALETTE_API` / `PALETTE_PROJECT_UID` — default to **cust-eng / SA-Dan-Speers**
-- ✅ `MAAS_API` — `http://homelab.cabin:5240/MAAS/api/2.0`; `maas()` builds the OAuth1 header from `MAAS_OAUTH`
-- ✅ `LXD_HOST_TAG=lxd-host` — the MaaS tag is **created**; optional `LXD_HOST_POOL` / `LXD_HOST_SYSTEM_ID` overrides
-- ✅ ISO serving — in-cluster nginx + RWX PVC (`ci/iso-fileserver.yaml`, **deployed**); `ISO_PUBLISH_BASE` defaults to `http://edge-iso.cabin` (resolves via the `*.cabin` wildcard → ingress VIP)
-- ⬜ **Earthly build targets** in `ci/build-canvos.sh` — pin the real `+build-*` target/args for CanvOS `v4.9.10`
-- ⬜ **Pick a healthy LXD-host machine** — tag it `lxd-host`, or let the selector claim a `Ready` one (only `major-wolf` is Ready, and it's flaky — consider freeing a healthy worker, not `superb-emu`)
+### 3. Config (defaults in the Jenkinsfile)
+- `PALETTE_API` / `PALETTE_PROJECT_UID` → **cust-eng / SA-Dan-Speers**
+- `CANVOS_VERSION` → `v4.9.10`
+- Registry destination comes from the bundle's `.arg` (`registry.cabin/ubuntu`)
 
-### 4. LXD host (persistent, self-healing, selected by ROLE)
-The host is **any** MaaS machine tagged `lxd-host` — not a fixed box. Each run,
-`ci/maas-ensure-lxd-host.sh` **discovers** the current holder and its IP from MaaS
-(**endpoint resolved per-run — no DNS alias**):
-- a tagged, Deployed machine whose LXD API is healthy → **reuse it**;
-- otherwise → **claim a `Ready` candidate** (optionally from `LXD_HOST_POOL`), deploy LXD via
-  `ci/cloud-init-lxd.yaml`, and tag it so future runs find it.
+### 4. Deploy (QEMU, in-cluster — no LXD/operator/MaaS)
+The `Deploy & verify` stage runs on `ci/qemu-agent-pod.yaml`: a privileged pod with `/dev/kvm`,
+pinned to a KVM node with headroom (`superb-emu`; `crisp-chow` is an equivalent fallback).
+`ci/qemu-launch-edge.sh` fetches the ISO from `edge-iso.cabin`, makes a qcow2 disk, and boots QEMU
+with **`-boot order=dc`** (empty disk falls through to the CD → installs → reboot → the installed
+disk boots → stylus registers). `ENABLE_VMO` (from the bundle) adds `-cpu host` (nested virt) and
+bumps RAM (~10Gi). `wait-palette-register.sh` polls Palette until the host appears; the stage tears
+the VM down afterward. Turn it on with the **`DEPLOY`** parameter (build-only by default).
 
-So you can **release the role-holder in MaaS anytime** — the next run picks a healthy host or
-provisions a fresh one. `FORCE_REPROVISION=true` forces a rebuild. The stage writes `build/lxd.env`
-(endpoint + `lxc` remote) for the deploy/teardown stages. The Jenkins client cert is **baked into
-`ci/cloud-init-lxd.yaml`** (public half only) and trusted automatically when a host is provisioned.
+**Capacity:** a register test needs ~5Gi; a VMO-functional test ~10–12Gi (fits one node like
+superb-emu). A full multi-node Piraeus cluster does **not** fit this cluster's RAM — real-hardware
+territory.
 
 ## Scripts (`ci/`)
 | Script | Stage | Contract |
 |---|---|---|
-| `lib.sh` | Preflight | reachability checks; `dump_vm_console` on failure |
+| `lib.sh` | Preflight | tool checks; `dump_vm_console` tails the VM serial log on failure |
 | `render-config.sh` | Render | bundle/paste → `build/{arg,user-data,byoos.yaml}`; secret substitution |
-| `build-canvos.sh` | Build | CanvOS build → ttl.sh image + published ISO → `build/outputs.env` |
-| `maas-ensure-lxd-host.sh` | Ensure LXD host | discover tagged host (or claim a `Ready` candidate); resolve endpoint → `build/lxd.env` |
-| `lxd-launch-edge.sh` | Deploy | import ISO to remote pool + empty LXD VM + attach + boot → `build/vm.env` |
-| `wait-palette-register.sh` | Verify | poll Palette API until the host registers |
-| `lxd-teardown.sh` | Teardown | delete the ephemeral VM |
+| `build-canvos.sh` | Build | CanvOS build → `docker push` provider image → publish ISO → `build/outputs.env` |
+| `qemu-launch-edge.sh` | Deploy | fetch ISO, boot it as a QEMU/KVM VM (`-boot order=dc`) |
+| `wait-palette-register.sh` | Verify | poll Palette API until the edge host registers |
+| `qemu-teardown.sh` | Teardown | stop the VM, remove disk/ISO |
 
-## Known caveats
-- **ttl.sh expiry** (≤24h): keep build→boot in one run, or the VM can't pull the provider image.
-- LXD VM needs egress to Palette + ttl.sh; Jenkins needs `homelab.cabin:5240` (MaaS) and `:8443` (LXD).
+## Notes
+- The deploy VM needs only **outbound internet** (QEMU slirp NAT) to register with Palette. The
+  `registry.cabin` provider-image pull happens later, when the host is added to a *cluster*.
+- `wait-palette-register.sh` currently matches the newest healthy/ready edge host — tighten to the
+  specific host UID embedded in user-data once validated.

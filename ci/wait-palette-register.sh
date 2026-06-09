@@ -6,7 +6,7 @@ source "$(dirname "$0")/lib.sh" >/dev/null 2>&1 || true
 : "${PALETTE_API_KEY:?}" ; : "${WORKDIR:=$(pwd)/build}"
 : "${PALETTE_API:=https://cust-eng.console.spectrocloud.com}"
 : "${PALETTE_PROJECT_UID:=6539402abeefa11ca7267d44}"   # cust-eng / SA-Dan-Speers
-source "${WORKDIR}/vm.env"
+source "${WORKDIR}/vm.env" 2>/dev/null || true   # VM_NAME (optional, for logging)
 TIMEOUT_MIN="${REGISTER_TIMEOUT_MIN:-25}"
 
 palette() { curl -fsS -H "ApiKey: ${PALETTE_API_KEY}" -H "ProjectUid: ${PALETTE_PROJECT_UID}" "$@"; }

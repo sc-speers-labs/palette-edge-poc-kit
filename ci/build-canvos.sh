@@ -57,9 +57,11 @@ BUILD_NAME="$(arg CUSTOM_TAG)"
 ISO_NAME="palette-edge-${BUILD_NAME}.iso"
 bash "${CI_DIR}/ci_publish_iso.sh" "${ISO_LOCAL}" "${ISO_NAME}"
 
+[[ -f "${WORKDIR}/meta.env" ]] && source "${WORKDIR}/meta.env" || true   # ENABLE_VMO etc.
 cat > "${WORKDIR}/outputs.env" <<EOF
 IMAGE_REF=${IMAGE_REF}
 ISO_URL=${ISO_PUBLISH_BASE}/${ISO_NAME}
 BUILD_NAME=${BUILD_NAME}
+ENABLE_VMO=${ENABLE_VMO:-false}
 EOF
 log "Build outputs:"; cat "${WORKDIR}/outputs.env"

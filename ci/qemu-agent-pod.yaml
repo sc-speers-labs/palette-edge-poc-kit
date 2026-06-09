@@ -1,0 +1,29 @@
+# Deploy agent: boots the built edge ISO as a QEMU/KVM VM to validate it installs and
+# registers into Palette. No LXD, no operator, no separate host — just qemu + /dev/kvm.
+# Pinned to a node with /dev/kvm and free RAM (superb-emu: 16 vCPU / 16Gi, lightly loaded;
+# crisp-chow is an equivalent fallback). Lives in the privileged edgeforge-build namespace.
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: edgeforge-build
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: superb-emu      # adjust to any node with /dev/kvm + headroom
+  hostAliases:
+    - ip: "192.168.5.13"
+      hostnames: ["edge-iso.cabin", "registry.cabin"]
+  containers:
+    - name: qemu
+      image: alpine:3.20                     # qemu/curl/jq installed at stage start
+      command: ["cat"]
+      tty: true
+      securityContext:
+        privileged: true
+      resources:
+        requests: { cpu: "4", memory: "6Gi" }
+        limits:   { cpu: "8", memory: "13Gi" }   # headroom for a ~10Gi VMO-sized VM
+      volumeMounts:
+        - { name: kvm, mountPath: /dev/kvm }
+  volumes:
+    - name: kvm
+      hostPath: { path: /dev/kvm, type: CharDevice }
