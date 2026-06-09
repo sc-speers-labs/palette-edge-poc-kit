@@ -409,7 +409,7 @@
 
 <div class="version-banner">
   <span>PALETTE EDGE — POC CONFIG GENERATOR</span>
-  <span class="vbadge">v1.3.0</span>
+  <span class="vbadge">v1.4.0</span>
   <span class="vbadge">Built: 2026-06-08</span>
   <span class="vbadge">K3s · Ubuntu · CanvOS</span>
 </div>
@@ -570,7 +570,10 @@
       <ul id="validationList"></ul>
     </div>
 
-    <button class="btn btn-download" id="downloadBundle" onclick="downloadBundle()" style="width:100%;margin:12px 0;padding:10px;font-weight:600;">&#11015;&nbsp; Download build bundle &nbsp;(edge-build.json &rarr; Jenkins)</button>
+    <div style="display:flex;gap:8px;margin:12px 0;">
+      <button class="btn btn-copy" id="copyBundle" onclick="copyBundle()" style="flex:2;padding:10px;font-weight:600;">&#128203;&nbsp; Copy build bundle &nbsp;(paste into Jenkins CONFIG_BUNDLE)</button>
+      <button class="btn btn-download" id="downloadBundle" onclick="downloadBundle()" style="flex:1;padding:10px;">&#11015;&nbsp; Download .json</button>
+    </div>
 
     <!-- .arg -->
     <div class="output-block">
@@ -685,7 +688,7 @@
     const raw = [
       `# ──────────────────────────────────────────────────────`,
       `# Palette Edge — CanvOS build arguments`,
-      `# Generated: ${new Date().toISOString().split('T')[0]}  |  Generator v1.3.0`,
+      `# Generated: ${new Date().toISOString().split('T')[0]}  |  Generator v1.4.0`,
       `# ──────────────────────────────────────────────────────`,
       ``,
       `ARCH=amd64`,
@@ -881,11 +884,9 @@
 
   // Build a single bundle the Jenkins job ingests via its CONFIG_BUNDLE file param.
   // meta keys are env-var names so ci/render-config.sh can source them directly.
-  function downloadBundle() {
-    if (!validate()) { alert('Fix the required fields before downloading the bundle.'); return; }
-    const tag = val('customTag');
+  function bundleJson() {
     const meta = {
-      BUILD_NAME:          tag,
+      BUILD_NAME:          val('customTag'),
       CANVOS_VERSION:      CANVOS_VERSION,
       K8S_DISTRIBUTION:    'k3s',
       K8S_VERSION:         val('k3sVersion'),
@@ -903,10 +904,27 @@
       byoos:    getRawContent('byoosContent'),
       meta:     meta,
     };
-    const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
+    return JSON.stringify(bundle, null, 2);
+  }
+
+  // Paste this into the Jenkins CONFIG_BUNDLE text parameter (a file upload can't reach
+  // a k8s build agent, so the job takes the bundle as pasted text).
+  function copyBundle() {
+    if (!validate()) { alert('Fix the required fields before copying the bundle.'); return; }
+    navigator.clipboard.writeText(bundleJson()).then(() => {
+      const btn = document.getElementById('copyBundle');
+      const orig = btn.innerHTML;
+      btn.textContent = 'Copied ✓'; btn.classList.add('copied');
+      setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('copied'); }, 2000);
+    });
+  }
+
+  function downloadBundle() {
+    if (!validate()) { alert('Fix the required fields before downloading the bundle.'); return; }
+    const blob = new Blob([bundleJson()], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `edge-build-${tag || 'config'}.json`;
+    a.download = `edge-build-${val('customTag') || 'config'}.json`;
     a.click();
     URL.revokeObjectURL(a.href);
   }

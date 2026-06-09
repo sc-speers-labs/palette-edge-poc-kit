@@ -4,6 +4,13 @@ All notable changes to this toolkit are documented here.
 
 ---
 
+## v1.4.0 — 2026-06-09
+
+**Added**
+- **Copy build bundle** button — copies `edge-build.json` to the clipboard to paste into the Jenkins `CONFIG_BUNDLE` text parameter (a file upload can't reach a Kubernetes build agent, so the pipeline takes the bundle as pasted text). Download `.json` retained alongside.
+
+---
+
 ## v1.3.0 — 2026-06-08
 
 Registry config — default to a persistent registry + insecure-registry support.

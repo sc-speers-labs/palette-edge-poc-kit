@@ -14,7 +14,7 @@ pipeline {
 
   parameters {
     // --- Config ingestion (provide ONE of these) ---
-    file(name: 'CONFIG_BUNDLE',   description: 'edge-build.json from the generator "Download build bundle" button (preferred)')
+    text(name: 'CONFIG_BUNDLE',   defaultValue: '', description: 'Paste the generator edge-build.json contents ("Copy bundle" button). Preferred over the fields below. (A file upload cannot reach a k8s agent, so this is text.)')
     text(name: 'ARG_CONTENT',     defaultValue: '', description: 'Fallback: paste the generated .arg contents')
     text(name: 'USERDATA_CONTENT',defaultValue: '', description: 'Fallback: paste the generated user-data contents (use ${REGISTRATION_TOKEN}/${OS_PASSWORD} placeholders)')
     text(name: 'BYOOS_CONTENT',   defaultValue: '', description: 'Optional: paste the byoos profile contents')

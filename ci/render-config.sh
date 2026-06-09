@@ -9,13 +9,19 @@ source "$(dirname "$0")/lib.sh" >/dev/null 2>&1 || true
 : "${WORKDIR:=$(pwd)/build}"
 mkdir -p "${WORKDIR}"
 
-if [[ -n "${CONFIG_BUNDLE:-}" && -s "${CONFIG_BUNDLE}" ]]; then
-  log "Rendering from bundle: ${CONFIG_BUNDLE}"
-  jq -r '.arg'       "${CONFIG_BUNDLE}" > "${WORKDIR}/arg"
-  jq -r '.userData'  "${CONFIG_BUNDLE}" > "${WORKDIR}/user-data"
-  jq -r '.byoos // ""' "${CONFIG_BUNDLE}" > "${WORKDIR}/byoos.yaml"
+# CONFIG_BUNDLE may be a path to edge-build.json OR the JSON pasted inline (text param).
+BUNDLE=""
+if [[ -n "${CONFIG_BUNDLE:-}" ]]; then
+  if [[ -f "${CONFIG_BUNDLE}" ]]; then BUNDLE="$(cat "${CONFIG_BUNDLE}")"
+  elif [[ "${CONFIG_BUNDLE}" == "{"* ]]; then BUNDLE="${CONFIG_BUNDLE}"; fi
+fi
+if [[ -n "${BUNDLE}" ]]; then
+  log "Rendering from bundle"
+  jq -r '.arg'         <<<"${BUNDLE}" > "${WORKDIR}/arg"
+  jq -r '.userData'    <<<"${BUNDLE}" > "${WORKDIR}/user-data"
+  jq -r '.byoos // ""' <<<"${BUNDLE}" > "${WORKDIR}/byoos.yaml"
   # Carry selectors forward (build name, k8s/os versions) for later stages.
-  jq -r '.meta // {} | to_entries[] | "\(.key)=\(.value)"' "${CONFIG_BUNDLE}" > "${WORKDIR}/meta.env" || true
+  jq -r '.meta // {} | to_entries[] | "\(.key)=\(.value)"' <<<"${BUNDLE}" > "${WORKDIR}/meta.env" || true
 else
   log "Rendering from pasted params"
   [[ -n "${ARG_CONTENT:-}" ]]      || die "No CONFIG_BUNDLE and ARG_CONTENT is empty"
