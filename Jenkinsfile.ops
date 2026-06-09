@@ -10,8 +10,8 @@ pipeline {
 
   parameters {
     choice(name: 'ACTION',
-           choices: ['report', 'deploy-existing', 'deregister-host', 'gc-registry', 'prune-isos', 'reap-pods'],
-           description: 'report: read-only inventory. deploy-existing: boot a prior build\'s ISO and verify it registers. deregister-host: delete an edge host from Palette. gc-registry / prune-isos / reap-pods: cleanup (honor DRY_RUN).')
+           choices: ['report', 'deploy-existing', 'teardown-vm', 'deregister-host', 'gc-registry', 'prune-isos', 'reap-pods'],
+           description: 'report: read-only inventory. deploy-existing: boot a prior build\'s ISO as a persistent VM + verify it registers. teardown-vm: delete standalone edge-vm pod(s). deregister-host: delete an edge host from Palette. gc-registry / prune-isos / reap-pods: cleanup (honor DRY_RUN).')
     string(name: 'SOURCE_BUILD', defaultValue: 'lastSuccessful',
            description: '[deploy-existing / deregister-host] Build # of "Build Edge Images and Test" to pull artifacts from, or "lastSuccessful".')
     string(name: 'ISO_URL', defaultValue: '',
@@ -24,6 +24,8 @@ pipeline {
            description: '[deregister-host] Edge host name to delete, resolved to a UID (used when HOST_UID is empty).')
     string(name: 'KEEP_ISOS', defaultValue: '5',
            description: '[prune-isos] Keep this many newest ISOs; delete the rest.')
+    string(name: 'VM_POD_NAME', defaultValue: '',
+           description: '[teardown-vm] Specific edge-vm pod to delete; empty = all app=edge-vm pods.')
     booleanParam(name: 'DRY_RUN', defaultValue: true,
            description: '[deregister-host / gc-registry / prune-isos / reap-pods] Show what would change without doing it.')
   }
@@ -49,9 +51,11 @@ pipeline {
 
     stage('Deploy existing') {
       when { expression { params.ACTION == 'deploy-existing' } }
-      agent { kubernetes { yamlFile 'ci/qemu-agent-pod.yaml'; defaultContainer 'qemu' } }
+      // Light ops agent launches a STANDALONE, persistent edge-vm pod (outlives this job)
+      // from a prior build's artifact, then polls Palette. No teardown — use teardown-vm.
+      agent { kubernetes { yamlFile 'ci/ops-agent-pod.yaml'; defaultContainer 'ops' } }
       steps {
-        sh 'apk add --no-cache bash qemu-system-x86_64 qemu-img curl jq >/dev/null'
+        sh 'apk add --no-cache bash curl jq coreutils gettext >/dev/null 2>&1 || true'
         copyArtifacts(projectName: env.BUILD_JOB, filter: 'build/*.env', target: '.', optional: true,
                       selector: params.SOURCE_BUILD == 'lastSuccessful' ? lastSuccessful() : specificBuild(params.SOURCE_BUILD))
         sh '''
@@ -60,15 +64,21 @@ pipeline {
           if [ -n "${PROJECT_NAME}" ]; then sed -i '/^PROJECT_NAME=/d' build/outputs.env; echo "PROJECT_NAME=${PROJECT_NAME}" >> build/outputs.env; fi
           echo "--- deploy inputs ---"; cat build/outputs.env
         '''
-        sh './ci/qemu-launch-edge.sh'
+        sh 'BUILD_TAG="exist-${SOURCE_BUILD}" ./ci/deploy-standalone.sh'
         sh './ci/wait-palette-register.sh'
       }
       post {
-        failure { sh './ci/lib.sh dump_vm_console || true' }
-        always  {
-          archiveArtifacts artifacts: 'build/deploy-record.env', allowEmptyArchive: true
-          sh './ci/qemu-teardown.sh || true'
-        }
+        failure { sh 'kubectl -n edgeforge-build logs "edge-vm-exist-${SOURCE_BUILD}" --tail=80 2>/dev/null || true' }
+        always  { archiveArtifacts artifacts: 'build/deploy-record.env', allowEmptyArchive: true }
+      }
+    }
+
+    stage('Teardown VM') {
+      when { expression { params.ACTION == 'teardown-vm' } }
+      agent { kubernetes { yamlFile 'ci/ops-agent-pod.yaml'; defaultContainer 'ops' } }
+      steps {
+        sh 'apk add --no-cache bash curl jq coreutils >/dev/null 2>&1 || true'
+        sh './ci/teardown-vm.sh'   // VM_POD_NAME (optional) targets one; else all app=edge-vm
       }
     }
 

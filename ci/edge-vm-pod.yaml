@@ -1,0 +1,42 @@
+# Standalone edge-VM pod template (envsubst'd + applied by ci/deploy-standalone.sh).
+# Unlike a Jenkins agent pod, this is a real workload that OUTLIVES the build job: it runs
+# the qemu VM in the foreground (ci/edge-vm-run.sh from the edge-vm-run ConfigMap) so the
+# registered host can be paired into a cluster and exercised. Tear it down explicitly with
+# the ops job's teardown-vm action (or `kubectl delete pod -l app=edge-vm`).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ${VM_POD_NAME}
+  namespace: edgeforge-build
+  labels:
+    app: edge-vm
+    build: "${BUILD_TAG}"
+spec:
+  nodeSelector:
+    edge-kvm: "true"          # any KVM node with headroom
+  restartPolicy: Never        # don't re-run the installer if qemu exits
+  hostAliases:
+    - ip: "192.168.5.13"
+      hostnames: ["edge-iso.cabin", "registry.cabin"]
+  containers:
+    - name: qemu
+      image: alpine:3.20                       # qemu installed at start by edge-vm-run.sh
+      command: ["/bin/sh", "/scripts/edge-vm-run.sh"]
+      securityContext:
+        privileged: true
+      env:
+        - { name: ISO_URL,      value: "${ISO_URL}" }
+        - { name: BUILD_NAME,   value: "${BUILD_NAME}" }
+        - { name: ENABLE_VMO,   value: "${ENABLE_VMO}" }
+        - { name: DATA_DISK_GB, value: "${DATA_DISK_GB}" }
+      resources:
+        requests: { cpu: "5", memory: "10Gi" }   # ~10Gi VM + overhead
+        limits:   { cpu: "8", memory: "13Gi" }
+      volumeMounts:
+        - { name: kvm,     mountPath: /dev/kvm }
+        - { name: scripts, mountPath: /scripts }
+  volumes:
+    - name: kvm
+      hostPath: { path: /dev/kvm, type: CharDevice }
+    - name: scripts
+      configMap: { name: edge-vm-run, defaultMode: 0755 }

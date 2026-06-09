@@ -16,10 +16,13 @@ Copy build bundle  ─►  Render ─► Build (tools+dind pod) ─► registry.
   edge-build.json         │            │
   (or paste params)       │            └─► installer ISO ─────────► edge-iso.cabin (nginx)
                           ▼                                                │
-                  Deploy & verify (qemu pod + /dev/kvm) ── fetch + boot ◄──┘
-                          │  -boot order=dc: install → reboot → installed OS boots
+                  Deploy: apply standalone edge-vm pod (/dev/kvm) ─ boot ◄──┘
+                          │  install → reboot → installed OS boots (pod persists)
                           ▼
                   Palette API ◄──── edge host self-registers (cust-eng / SA-Dan-Speers)
+                          │
+                  (host stays registered + VM keeps running → pair into a cluster;
+                   tear down later via ops ACTION=teardown-vm)
 ```
 
 ## How config gets in
@@ -60,14 +63,18 @@ kubectl label node superb-emu crisp-chow valid-ram edge-kvm=true --overwrite
 - `CANVOS_VERSION` → `v4.9.10`
 - Registry destination comes from the bundle's `.arg` (`registry.cabin/ubuntu`)
 
-### 4. Deploy (QEMU, in-cluster — no LXD/operator/MaaS)
-The `Deploy & verify` stage runs on `ci/qemu-agent-pod.yaml`: a privileged pod with `/dev/kvm`,
-pinned to a KVM node with headroom (`superb-emu`; `crisp-chow` is an equivalent fallback).
-`ci/qemu-launch-edge.sh` fetches the ISO from `edge-iso.cabin`, makes a qcow2 disk, and boots QEMU
-with **`-boot order=dc`** (empty disk falls through to the CD → installs → reboot → the installed
-disk boots → stylus registers). `ENABLE_VMO` (from the bundle) adds `-cpu host` (nested virt) and
-bumps RAM (~10Gi). `wait-palette-register.sh` polls Palette until the host appears; the stage tears
-the VM down afterward. Turn it on with the **`DEPLOY`** parameter (build-only by default).
+### 4. Deploy (standalone QEMU pod, in-cluster — no LXD/operator/MaaS)
+The `Deploy & verify` stage runs on the **light ops agent** (`ci/ops-agent-pod.yaml`, kubectl+curl).
+It `kubectl apply`s a **standalone `edge-vm-<build>` pod** (`ci/edge-vm-pod.yaml`, privileged +
+`/dev/kvm`, `nodeSelector edge-kvm=true`) whose container runs `ci/edge-vm-run.sh` — qemu in the
+**foreground** (validated Spectro spec: virtio-blk `bootindex=0`, ide-cd `bootindex=1`, `-cpu host`,
+qemu-guest-agent channel; serial → `kubectl logs`). Because the VM is its own pod, it **outlives the
+job** — so the registered host can be paired into a cluster and exercised. `wait-palette-register.sh`
+(on the ops agent) just polls Palette. **No teardown here** — remove the VM later via the ops job
+(`ACTION=teardown-vm`). Turn deploy on with the **`DEPLOY`** parameter (build-only by default).
+
+Reach the VM: `kubectl -n edgeforge-build logs -f edge-vm-<build>` (console), or
+`kubectl -n edgeforge-build port-forward edge-vm-<build> 2224:2224` then `ssh -p 2224 kairos@localhost`.
 
 **Capacity:** a register test needs ~5Gi; a VMO-functional test ~10–12Gi (fits one node like
 superb-emu). A full multi-node Piraeus cluster does **not** fit this cluster's RAM — real-hardware
@@ -76,12 +83,13 @@ territory.
 ## Scripts (`ci/`)
 | Script | Stage | Contract |
 |---|---|---|
-| `lib.sh` | Preflight | tool checks; `dump_vm_console` tails the VM serial log on failure |
-| `render-config.sh` | Render | bundle/paste → `build/{arg,user-data,byoos.yaml}`; secret substitution |
+| `lib.sh` | Preflight | tool checks; helpers |
+| `render-config.sh` | Render | bundle/paste → `build/{arg,user-data,byoos.yaml}`; secret substitution; **endpoint guard** |
 | `build-canvos.sh` | Build | CanvOS build → `docker push` provider image → publish ISO → `build/outputs.env` |
-| `qemu-launch-edge.sh` | Deploy | fetch ISO, boot it as a QEMU/KVM VM (`-boot order=dc`) |
+| `deploy-standalone.sh` | Deploy | apply the `edge-vm-run` ConfigMap + the standalone `edge-vm-<build>` pod; wait Running |
+| `edge-vm-run.sh` | (in-pod) | foreground qemu launcher mounted into the edge-vm pod via ConfigMap |
 | `wait-palette-register.sh` | Verify | poll Palette until the host registers; write `outputs.env`/`deploy-record.env` |
-| `qemu-teardown.sh` | Teardown | stop the VM, remove disk/ISO |
+| `teardown-vm.sh` | (ops) | delete standalone edge-vm pod(s) |
 
 ## Ops / utility job (`Jenkinsfile.ops`)
 A **second pipeline job** pointed at `Jenkinsfile.ops` handles everything around a build's
@@ -91,7 +99,8 @@ lifecycle. One job; the **`ACTION`** parameter selects the operation. It reuses 
 | `ACTION` | Does | Agent | Notes |
 |---|---|---|---|
 | `report` | Read-only inventory: KVM nodes, agent pods, registry repos/tags + PVC, ISOs + PVC, Palette edge hosts per project | ops | — |
-| `deploy-existing` | Boot a **prior build's** ISO → register (no rebuild). `SOURCE_BUILD` picks the build; `ISO_URL`/`PROJECT_NAME` override | qemu | needs Copy Artifact plugin |
+| `deploy-existing` | Boot a **prior build's** ISO as a **persistent** edge-vm pod → register (no rebuild). `SOURCE_BUILD` picks the build; `ISO_URL`/`PROJECT_NAME` override | ops | needs Copy Artifact plugin |
+| `teardown-vm` | Delete standalone edge-vm pod(s) — one (`VM_POD_NAME`) or all `app=edge-vm` | ops | `DRY_RUN` |
 | `deregister-host` | Delete an edge host from Palette (`HOST_UID`/`HOST_NAME`, or from the build's `deploy-record.env`) | ops | needs Copy Artifact plugin (unless UID/NAME given); `DRY_RUN` |
 | `gc-registry` | `registry garbage-collect -m` to reclaim untagged/orphaned blobs | ops | `DRY_RUN` |
 | `prune-isos` | Keep the `KEEP_ISOS` newest ISOs on the PVC, delete the rest | ops | `DRY_RUN` |

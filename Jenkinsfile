@@ -57,26 +57,29 @@ pipeline {
 
     stage('Deploy & verify') {
       when { expression { return params.DEPLOY } }
-      // Own pod: qemu + /dev/kvm, pinned to a KVM node. Boots the ISO, polls Palette,
-      // tears down — all in one stage so the VM persists across launch -> verify.
+      // Light ops agent (kubectl+curl) launches a STANDALONE edge-vm pod that outlives the
+      // job (so the host can be paired into a cluster), then polls Palette. The VM is NOT
+      // torn down here — remove it later via the ops job (ACTION=teardown-vm).
       agent {
         kubernetes {
-          yamlFile 'ci/qemu-agent-pod.yaml'
-          defaultContainer 'qemu'
+          yamlFile 'ci/ops-agent-pod.yaml'
+          defaultContainer 'ops'
         }
       }
       steps {
         unstash 'edge-outputs'
-        sh 'apk add --no-cache bash qemu-system-x86_64 qemu-img curl jq'
-        sh './ci/qemu-launch-edge.sh'
+        sh 'apk add --no-cache bash curl jq gettext >/dev/null 2>&1 || true'
+        sh './ci/deploy-standalone.sh'
         sh './ci/wait-palette-register.sh'
       }
       post {
-        failure { sh './ci/lib.sh dump_vm_console || true' }
-        always  {
+        failure {
+          // Dump the VM's serial console (kubectl logs) for debugging; leave the pod up.
+          sh 'kubectl -n edgeforge-build logs "edge-vm-${BUILD_NUMBER}" --tail=80 2>/dev/null || true'
+        }
+        always {
           // deploy-record.env (host UID/name + project) lets the ops job deregister later.
           archiveArtifacts artifacts: 'build/deploy-record.env', allowEmptyArchive: true
-          sh './ci/qemu-teardown.sh || true'
         }
       }
     }
