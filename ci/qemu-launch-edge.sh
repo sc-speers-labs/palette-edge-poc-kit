@@ -22,11 +22,22 @@ qemu-img create -f qcow2 "${WORKDIR}/edge-disk.qcow2" 40G >/dev/null
 # -cpu host exposes vmx/svm to the guest for nested virt (KubeVirt/VMO).
 CPU_OPT=""; [[ "${ENABLE_VMO}" == "true" ]] && CPU_OPT="-cpu host"
 
+# Optional second disk for Piraeus *lvm-thin* (-> /dev/vdb; the profile/host then makes
+# the drbd-vg/thinpool on it). Piraeus *file-thin* needs none — it lives on the boot disk
+# at /var/lib/piraeus (persisted by the generator's bind_mounts). Default: no data disk.
+: "${DATA_DISK_GB:=0}"
+DATA_OPT=""
+if [[ "${DATA_DISK_GB}" -gt 0 ]]; then
+  qemu-img create -f qcow2 "${WORKDIR}/edge-data.qcow2" "${DATA_DISK_GB}G" >/dev/null
+  DATA_OPT="-drive file=${WORKDIR}/edge-data.qcow2,if=virtio,format=qcow2"
+  log "Attached ${DATA_DISK_GB}G data disk for Piraeus lvm-thin (guest /dev/vdb)"
+fi
+
 # -boot order=dc: empty disk first boot falls through to the CD (installs); on the
 # post-install reboot the now-bootable disk wins, so the installed OS boots and registers.
 log "Booting edge VM ${BUILD_NAME} (${VM_CORES} vCPU / ${VM_MEM} MiB; VMO=${ENABLE_VMO})"
 nohup qemu-system-x86_64 -enable-kvm ${CPU_OPT} -m "${VM_MEM}" -smp "${VM_CORES}" \
-  -drive file="${WORKDIR}/edge-disk.qcow2",if=virtio,format=qcow2 \
+  -drive file="${WORKDIR}/edge-disk.qcow2",if=virtio,format=qcow2 ${DATA_OPT} \
   -cdrom "${WORKDIR}/edge.iso" -boot order=dc \
   -netdev user,id=n0 -device virtio-net-pci,netdev=n0 \
   -display none -serial "file:${WORKDIR}/serial.log" >"${WORKDIR}/qemu.out" 2>&1 &
