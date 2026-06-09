@@ -25,9 +25,14 @@ docker info >/dev/null 2>&1 || die "dind Docker daemon not reachable at ${DOCKER
 
 # CanvOS must be on the shared /ws volume so the dind daemon can mount it.
 SRC="/ws/canvos"
-rm -rf "${SRC}"
 log "Cloning CanvOS ${CANVOS_VERSION} into ${SRC}"
-git clone --depth 1 --branch "${CANVOS_VERSION}" https://github.com/spectrocloud/CanvOS.git "${SRC}"
+# Retry the clone — the build agent occasionally hits a transient DNS/network blip.
+for attempt in 1 2 3 4; do
+  rm -rf "${SRC}"
+  git clone --depth 1 --branch "${CANVOS_VERSION}" https://github.com/spectrocloud/CanvOS.git "${SRC}" && break
+  [ "${attempt}" -ge 4 ] && die "git clone CanvOS failed after ${attempt} attempts (DNS/network?)"
+  log "clone attempt ${attempt} failed — retrying in $((attempt*10))s"; sleep $((attempt*10))
+done
 cp "${WORKDIR}/arg"       "${SRC}/.arg"          # earthly reads .arg as build args automatically
 cp "${WORKDIR}/user-data" "${SRC}/user-data"
 
