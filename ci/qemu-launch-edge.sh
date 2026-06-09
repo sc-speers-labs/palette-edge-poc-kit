@@ -33,12 +33,12 @@ if [[ "${DATA_DISK_GB}" -gt 0 ]]; then
   log "Attached ${DATA_DISK_GB}G data disk for Piraeus lvm-thin (guest /dev/vdb)"
 fi
 
-# -boot order=dc: empty disk first boot falls through to the CD (installs); on the
+# -boot order=cd: empty disk first boot falls through to the CD (installs); on the
 # post-install reboot the now-bootable disk wins, so the installed OS boots and registers.
 log "Booting edge VM ${BUILD_NAME} (${VM_CORES} vCPU / ${VM_MEM} MiB; VMO=${ENABLE_VMO})"
 nohup qemu-system-x86_64 -enable-kvm ${CPU_OPT} -m "${VM_MEM}" -smp "${VM_CORES}" \
   -drive file="${WORKDIR}/edge-disk.qcow2",if=virtio,format=qcow2 ${DATA_OPT} \
-  -cdrom "${WORKDIR}/edge.iso" -boot order=dc \
+  -cdrom "${WORKDIR}/edge.iso" -boot order=cd \
   -netdev user,id=n0 -device virtio-net-pci,netdev=n0 \
   -display none -serial "file:${WORKDIR}/serial.log" >"${WORKDIR}/qemu.out" 2>&1 &
 echo "$!" > "${WORKDIR}/qemu.pid"
