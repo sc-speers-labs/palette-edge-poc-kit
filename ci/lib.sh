@@ -18,7 +18,8 @@ preflight() {
   command -v jq   >/dev/null || die "jq not found on agent"
   command -v curl >/dev/null || die "curl not found on agent"
   if [[ "${DEPLOY:-true}" == "true" ]]; then
-    command -v lxc >/dev/null || die "lxc client not found on agent (needed to drive LXD)"
+    # lxc is only needed by the deploy stages (still unwired) — warn, don't block the build.
+    command -v lxc >/dev/null || log "WARN: lxc client not found — the LXD deploy stages will fail (the build itself still runs)"
     curl -fsS -m 5 -o /dev/null "${MAAS_API}/version/" \
       || die "MaaS API unreachable at ${MAAS_API} (Jenkins -> homelab.cabin:5240?)"
   fi
