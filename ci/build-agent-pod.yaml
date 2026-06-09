@@ -1,40 +1,49 @@
-# Single agent pod for the whole pipeline — two containers sharing the workspace:
-#   tools   : alpine + (bash/jq/curl/gettext/git via the Setup stage) — runs the
-#             orchestration stages (preflight, render, verify, and the deploy stages).
-#   earthly : privileged earthly/earthly — runs the CanvOS build (pure buildkit,
-#             `earthly --push`; no Docker daemon needed).
-# The Kubernetes plugin mounts the shared workspace into every container, so build/arg
-# written by Render (tools) is visible to the Build stage (earthly) — no stash needed.
-# Deploys into the privileged edgeforge-build namespace (PSA privileged + the edge-iso PVC).
+# Single agent pod for the whole pipeline:
+#   tools : docker:cli (+ bash/jq/curl/gettext/git via the Setup stage). Runs every
+#           stage; the Build stage shells `docker` at the dind sidecar to run CanvOS.
+#   dind  : Docker-in-Docker daemon (privileged), configured insecure for registry.cabin.
+# A shared emptyDir (/ws) is mounted in BOTH so `docker run -v /ws/...` (resolved on the
+# dind daemon) sees the CanvOS checkout the tools container writes. Validated approach:
+# earthly builds the provider image (loaded into dind's Docker), then a plain `docker push`
+# uploads it — earthly's own insecure push does NOT work, but `docker push` does.
+# Lives in the privileged edgeforge-build namespace (PSA privileged + the edge-iso PVC).
 apiVersion: v1
 kind: Pod
 metadata:
   namespace: edgeforge-build
 spec:
-  # Resolve the in-cluster ingress hostnames (push target + ISO publish) regardless of
-  # whether cluster DNS forwards the *.cabin zone.
   hostAliases:
     - ip: "192.168.5.13"
       hostnames: ["registry.cabin", "edge-iso.cabin"]
   containers:
     - name: tools
-      image: alpine:3.20
+      image: docker:27-cli            # docker CLI present; Setup adds bash/jq/curl/gettext/git
       command: ["cat"]
       tty: true
-      resources:
-        requests: { cpu: "200m", memory: "256Mi" }
-        limits:   { cpu: "1", memory: "1Gi" }
-    - name: earthly
-      image: earthly/earthly:v0.8.15
-      command: ["cat"]
-      tty: true
-      securityContext:
-        privileged: true            # embedded buildkitd needs it
-      resources:
-        requests: { cpu: "4", memory: "6Gi", ephemeral-storage: "30Gi" }
-        limits:   { cpu: "8", memory: "12Gi", ephemeral-storage: "60Gi" }
+      env:
+        - { name: DOCKER_HOST, value: "tcp://127.0.0.1:2375" }
       volumeMounts:
-        - { name: edge-iso, mountPath: /edge-iso }   # ISO publish target (RWX, served by nginx)
+        - { name: ws,       mountPath: /ws }
+        - { name: edge-iso, mountPath: /edge-iso }
+      resources:
+        requests: { cpu: "500m", memory: "512Mi" }
+        limits:   { cpu: "2", memory: "2Gi" }
+    - name: dind
+      image: docker:27-dind
+      securityContext:
+        privileged: true
+      env:
+        - { name: DOCKER_TLS_CERTDIR, value: "" }   # listen plain on tcp://0.0.0.0:2375
+      volumeMounts:
+        - { name: ws,  mountPath: /ws }
+        - { name: cfg, mountPath: /etc/docker/daemon.json, subPath: daemon.json }
+      resources:
+        requests: { cpu: "4", memory: "6Gi", ephemeral-storage: "40Gi" }
+        limits:   { cpu: "8", memory: "12Gi", ephemeral-storage: "80Gi" }
   volumes:
+    - name: ws
+      emptyDir: {}
     - name: edge-iso
       persistentVolumeClaim: { claimName: edge-iso }
+    - name: cfg
+      configMap: { name: dind-daemon }

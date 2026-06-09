@@ -48,6 +48,7 @@ kubectl label namespace edgeforge-build pod-security.kubernetes.io/enforce=privi
 # In-cluster services + RBAC for the build agent
 kubectl apply -f ci/iso-fileserver.yaml   # ISO file server  -> edge-iso.cabin
 kubectl apply -f ci/registry.yaml         # provider registry -> registry.cabin
+kubectl apply -f ci/build-dind-config.yaml # dind insecure-registry config
 kubectl apply -f ci/jenkins-rbac.yaml     # let the Jenkins SA run agent pods here
 ```
 

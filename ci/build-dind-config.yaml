@@ -1,0 +1,10 @@
+# Docker daemon config for the build pod's dind sidecar: trust registry.cabin over HTTP
+# (the provider image is pushed here with a plain `docker push`).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dind-daemon
+  namespace: edgeforge-build
+data:
+  daemon.json: |
+    {"insecure-registries": ["registry.cabin"]}

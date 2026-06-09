@@ -65,13 +65,10 @@ pipeline {
     }
 
     stage('Build artifacts') {
-      // Runs in the 'earthly' container of the shared pod; pushes the provider image
-      // to registry.cabin and publishes the ISO. Writes build/outputs.env.
+      // Runs in 'tools' (docker CLI -> dind sidecar): builds CanvOS, docker-pushes the
+      // provider image to registry.cabin, publishes the ISO. Writes build/outputs.env.
       steps {
-        container('earthly') {
-          sh 'command -v bash >/dev/null 2>&1 || apk add --no-cache bash git'
-          sh './ci/build-canvos.sh'
-        }
+        sh './ci/build-canvos.sh'
       }
     }
 
