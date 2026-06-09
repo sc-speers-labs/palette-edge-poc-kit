@@ -8,7 +8,8 @@ metadata:
   namespace: edgeforge-build
 spec:
   nodeSelector:
-    kubernetes.io/hostname: superb-emu      # adjust to any node with /dev/kvm + headroom
+    edge-kvm: "true"      # any node with /dev/kvm + headroom (label them; see BUILD-PIPELINE.md).
+                          # Spans nodes so this and the held build pod land on different ones.
   hostAliases:
     - ip: "192.168.5.13"
       hostnames: ["edge-iso.cabin", "registry.cabin"]

@@ -42,6 +42,10 @@ kubectl apply -f ci/iso-fileserver.yaml     # ISO server    -> edge-iso.cabin
 kubectl apply -f ci/registry.yaml           # provider reg  -> registry.cabin (insecure HTTP)
 kubectl apply -f ci/build-dind-config.yaml  # dind insecure-registry config
 kubectl apply -f ci/jenkins-rbac.yaml       # Jenkins SA can run agent pods in this ns
+
+# Label the nodes that have /dev/kvm + RAM headroom so the qemu deploy pod can land on
+# any of them (and not collide with the held build pod). Adjust the node list to yours:
+kubectl label node superb-emu crisp-chow valid-ram edge-kvm=true --overwrite
 ```
 
 ### 2. Jenkins credentials
