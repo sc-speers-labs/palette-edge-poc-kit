@@ -55,7 +55,7 @@ ISO_LOCAL="$(ls "${SRC}"/build/*.iso 2>/dev/null | head -1 || true)"
 [[ -n "${ISO_LOCAL}" ]] || die "No ISO produced by CanvOS build"
 BUILD_NAME="$(arg CUSTOM_TAG)"
 ISO_NAME="palette-edge-${BUILD_NAME}.iso"
-"${CI_DIR}/ci_publish_iso.sh" "${ISO_LOCAL}" "${ISO_NAME}"
+bash "${CI_DIR}/ci_publish_iso.sh" "${ISO_LOCAL}" "${ISO_NAME}"
 
 cat > "${WORKDIR}/outputs.env" <<EOF
 IMAGE_REF=${IMAGE_REF}
