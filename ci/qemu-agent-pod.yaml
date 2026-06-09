@@ -20,8 +20,8 @@ spec:
       securityContext:
         privileged: true
       resources:
-        requests: { cpu: "4", memory: "6Gi" }
-        limits:   { cpu: "8", memory: "13Gi" }   # headroom for a ~10Gi VMO-sized VM
+        requests: { cpu: "5", memory: "10Gi" }   # ~10Gi VM (Spectro-recommended) + overhead
+        limits:   { cpu: "8", memory: "13Gi" }
       volumeMounts:
         - { name: kvm, mountPath: /dev/kvm }
   volumes:
