@@ -111,9 +111,9 @@ successful register, `build/deploy-record.env` (host UID/name + project). `deplo
 `deregister-host` pull them with `copyArtifacts` (`SOURCE_BUILD` = build # or `lastSuccessful`), so
 no values are hand-typed. Destructive actions default to **`DRY_RUN=true`**.
 
-**Setup:** `kubectl apply -f ci/ops-rbac.yaml`; install the **Copy Artifact** plugin (separate from
-core `archiveArtifacts`; only `deploy-existing`/`deregister-host` need it); add a 2nd Pipeline job
-(same repo, `Script Path: Jenkinsfile.ops`) with the same three credentials as the build job.
+**Setup:** `kubectl apply -f ci/ops-rbac.yaml`; the **Copy Artifact** plugin (`copyartifact`, required
+by `deploy-existing`/`deregister-host`) is already installed; add a 2nd Pipeline job (same repo,
+`Script Path: Jenkinsfile.ops`) with the same three credentials as the build job.
 
 ## Notes
 - The deploy VM needs only **outbound internet** (QEMU slirp NAT) to register with Palette. The
