@@ -40,7 +40,7 @@ nohup qemu-system-x86_64 -enable-kvm -cpu host -m "${VM_MEM}" -smp "${VM_CORES}"
   -device virtio-blk-pci,drive=disk1,bootindex=0 ${DATA_OPT} \
   -netdev user,id=net0,hostfwd=tcp::2224-:22 -device e1000,netdev=net0 \
   -drive id=cdrom1,if=none,media=cdrom,file="${WORKDIR}/edge.iso" \
-  -device ide-cd,drive=cdrom1,bootindex=1 -boot menu=on \
+  -device ide-cd,drive=cdrom1,bootindex=1 \
   -display none -serial "file:${WORKDIR}/serial.log" >"${WORKDIR}/qemu.out" 2>&1 &
 echo "$!" > "${WORKDIR}/qemu.pid"
 echo "VM_NAME=${BUILD_NAME}" > "${WORKDIR}/vm.env"

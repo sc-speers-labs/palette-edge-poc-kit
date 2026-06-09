@@ -4,6 +4,13 @@ All notable changes to this toolkit are documented here.
 
 ---
 
+## v1.6.0 — 2026-06-09
+
+**Changed**
+- user-data `install:` now sets **`auto: true`** and **`device: auto`** so the Edge installer runs fully unattended (per Spectro guidance) regardless of boot menu / GRUB-entry quirks — it no longer risks dropping to the interactive Kairos installer.
+
+---
+
 ## v1.5.0 — 2026-06-09
 
 **Added**

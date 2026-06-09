@@ -409,7 +409,7 @@
 
 <div class="version-banner">
   <span>PALETTE EDGE — POC CONFIG GENERATOR</span>
-  <span class="vbadge">v1.5.0</span>
+  <span class="vbadge">v1.6.0</span>
   <span class="vbadge">Built: 2026-06-08</span>
   <span class="vbadge">K3s · Ubuntu · CanvOS</span>
 </div>
@@ -721,7 +721,7 @@
     const raw = [
       `# ──────────────────────────────────────────────────────`,
       `# Palette Edge — CanvOS build arguments`,
-      `# Generated: ${new Date().toISOString().split('T')[0]}  |  Generator v1.5.0`,
+      `# Generated: ${new Date().toISOString().split('T')[0]}  |  Generator v1.6.0`,
       `# ──────────────────────────────────────────────────────`,
       ``,
       `ARCH=amd64`,
@@ -795,6 +795,8 @@
       ] : []),
       ``,
       `install:`,
+      `  auto: true`,
+      `  device: auto`,
       `  reboot: ${poweroff ? 'false' : 'true'}`,
       `  poweroff: ${poweroff ? 'true' : 'false'}`,
       ...(enablePiraeus ? [
