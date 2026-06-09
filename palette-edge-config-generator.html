@@ -409,7 +409,7 @@
 
 <div class="version-banner">
   <span>PALETTE EDGE — POC CONFIG GENERATOR</span>
-  <span class="vbadge">v1.4.0</span>
+  <span class="vbadge">v1.5.0</span>
   <span class="vbadge">Built: 2026-06-08</span>
   <span class="vbadge">K3s · Ubuntu · CanvOS</span>
 </div>
@@ -522,14 +522,46 @@
       <div class="section-label">Kubernetes</div>
 
       <div class="field">
-        <label>K3s Version</label>
-        <select id="k3sVersion" onchange="update()">
+        <label>Kubernetes Distribution</label>
+        <select id="k8sDist" onchange="update()">
+          <option value="k3s" selected>K3s</option>
+          <option value="kubeadm">PXK-E (kubeadm)</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Kubernetes Version</label>
+        <input list="k8sVersions" id="k3sVersion" value="1.32.13" oninput="update()" autocomplete="off">
+        <datalist id="k8sVersions">
           <option value="1.35.3">1.35.3 (latest)</option>
           <option value="1.34.6">1.34.6</option>
           <option value="1.33.10">1.33.10</option>
-          <option value="1.32.13" selected>1.32.13</option>
-        </select>
-        <div class="field-hint">Check <a href="https://github.com/spectrocloud/CanvOS/blob/main/k8s_version.json" target="_blank" style="color:var(--accent)">k8s_version.json</a> in CanvOS for all supported versions.</div>
+          <option value="1.33.6">1.33.6 (VMO RA)</option>
+          <option value="1.32.13">1.32.13</option>
+        </datalist>
+        <div class="field-hint">Must match the cluster profile's k8s pack tag. See <a href="https://github.com/spectrocloud/CanvOS/blob/main/k8s_version.json" target="_blank" style="color:var(--accent)">k8s_version.json</a> for supported values.</div>
+      </div>
+
+      <div class="toggle-row">
+        <div>
+          <div style="font-size:13px;color:var(--text);margin-bottom:2px;">Enable VMO (Virtual Machine Orchestrator)</div>
+          <div class="toggle-desc">Presets PXK-E + Ubuntu 22.04, loads <code>kvm</code>/<code>vhost_net</code> in user-data, and enables nested virt on the LXD test VM. KubeVirt 1.7 supports k8s 1.32–1.34 (not 1.35).</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="enableVmo" onchange="vmoPreset()">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <div class="toggle-row">
+        <div>
+          <div style="font-size:13px;color:var(--text);margin-bottom:2px;">Piraeus host prep</div>
+          <div class="toggle-desc">Adds <code>install.bind_mounts</code> for <code>/etc/lvm</code>, <code>/var/lib/drbd</code>, <code>/var/lib/linstor.d</code>, <code>/var/lib/piraeus</code> so LINSTOR/DRBD state persists across reboots. Not needed for Longhorn.</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="enablePiraeus" onchange="update()">
+          <span class="toggle-slider"></span>
+        </label>
       </div>
 
       <div class="toggle-row">
@@ -645,6 +677,7 @@
     if (!tag) errors.push('Custom tag is required');
     if (!usePlaceholders && !password) errors.push('OS password is required');
     if (tag && !/^[a-z0-9-]+$/.test(tag)) errors.push('Custom tag must be alphanumeric lowercase');
+    if (checked('enableVmo') && val('k3sVersion').startsWith('1.35')) errors.push('VMO/KubeVirt 1.7 supports k8s 1.32–1.34, not 1.35 — pick a 1.32–1.34 version');
 
     // field highlights (token/password not required in placeholder mode)
     document.getElementById('edgeHostToken').classList.toggle('invalid', !usePlaceholders && !token);
@@ -688,7 +721,7 @@
     const raw = [
       `# ──────────────────────────────────────────────────────`,
       `# Palette Edge — CanvOS build arguments`,
-      `# Generated: ${new Date().toISOString().split('T')[0]}  |  Generator v1.4.0`,
+      `# Generated: ${new Date().toISOString().split('T')[0]}  |  Generator v1.5.0`,
       `# ──────────────────────────────────────────────────────`,
       ``,
       `ARCH=amd64`,
@@ -696,7 +729,7 @@
       `OS_VERSION=${osVer}`,
       ``,
       `# Kubernetes`,
-      `K8S_DISTRIBUTION=k3s`,
+      `K8S_DISTRIBUTION=${val('k8sDist')}`,
       `K8S_VERSION=${k3sVer}`,
       ``,
       `# Provider image location`,
@@ -745,6 +778,8 @@
     const poweroff  = checked('poweroff');
     const insecureReg = checked('insecureRegistry');
     const registry  = val('imageRegistry') || 'registry.cabin';
+    const enableVmo = checked('enableVmo');
+    const enablePiraeus = checked('enablePiraeus');
 
     const raw = [
       `#cloud-config`,
@@ -762,8 +797,23 @@
       `install:`,
       `  reboot: ${poweroff ? 'false' : 'true'}`,
       `  poweroff: ${poweroff ? 'true' : 'false'}`,
+      ...(enablePiraeus ? [
+      `  bind_mounts:`,
+      `    - /etc/lvm`,
+      `    - /var/lib/drbd`,
+      `    - /var/lib/linstor.d`,
+      `    - /var/lib/piraeus`,
+      ] : []),
       ``,
       `stages:`,
+      ...(enableVmo ? [
+      `  boot:`,
+      `    - name: Load VMO virtualization modules`,
+      `      commands:`,
+      `        - modprobe kvm`,
+      `        - modprobe kvm_intel 2>/dev/null || modprobe kvm_amd 2>/dev/null || true`,
+      `        - modprobe vhost_net`,
+      ] : []),
       `  initramfs:`,
       `    - users:`,
       `        kairos:`,
@@ -814,7 +864,7 @@
       `  system.uri: "{{ .spectro.pack.edge-native-byoi.options.system.registry }}/{{ .spectro.pack.edge-native-byoi.options.system.repo }}:{{ .spectro.pack.edge-native-byoi.options.system.k8sDistribution }}-{{ .spectro.system.kubernetes.version }}-{{ .spectro.pack.edge-native-byoi.options.system.peVersion }}-{{ .spectro.pack.edge-native-byoi.options.system.customTag }}"`,
       `  system.registry: ${registry}`,
       `  system.repo: ${repo}`,
-      `  system.k8sDistribution: k3s`,
+      `  system.k8sDistribution: ${val('k8sDist')}`,
       `  system.osName: ubuntu`,
       `  system.peVersion: ${CANVOS_VERSION}`,
       `  system.customTag: ${tag}`,
@@ -884,11 +934,22 @@
 
   // Build a single bundle the Jenkins job ingests via its CONFIG_BUNDLE file param.
   // meta keys are env-var names so ci/render-config.sh can source them directly.
+  // VMO requires PXK-E + Ubuntu 22.04; auto-set those when the toggle is enabled.
+  function vmoPreset() {
+    if (checked('enableVmo')) {
+      document.getElementById('k8sDist').value = 'kubeadm';
+      const os22 = document.getElementById('os22'); if (os22) os22.checked = true;
+    }
+    update();
+  }
+
   function bundleJson() {
     const meta = {
       BUILD_NAME:          val('customTag'),
       CANVOS_VERSION:      CANVOS_VERSION,
-      K8S_DISTRIBUTION:    'k3s',
+      K8S_DISTRIBUTION:    val('k8sDist'),
+      ENABLE_VMO:          checked('enableVmo'),
+      ENABLE_PIRAEUS:      checked('enablePiraeus'),
       K8S_VERSION:         val('k3sVersion'),
       OS_VERSION:          radio('osVersion'),
       IMAGE_REGISTRY:      val('imageRegistry'),

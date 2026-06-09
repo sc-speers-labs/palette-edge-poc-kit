@@ -4,6 +4,16 @@ All notable changes to this toolkit are documented here.
 
 ---
 
+## v1.5.0 — 2026-06-09
+
+**Added**
+- **Kubernetes Distribution** selector — **K3s** or **PXK-E (kubeadm)**. Drives `K8S_DISTRIBUTION` in `.arg`, `system.k8sDistribution` in the BYOOS profile, and the bundle `meta`.
+- **Kubernetes Version** is now an editable field (datalist) so you can match a specific cluster-profile pack tag (e.g. the VMO RA's `1.33.6`), not just the latest patch.
+- **Enable VMO** toggle — presets PXK-E + Ubuntu 22.04, injects a `stages.boot` step loading `kvm`/`kvm_intel|amd`/`vhost_net` into user-data, records `ENABLE_VMO` in `meta` (the deploy step enables nested virt on the LXD VM), and blocks k8s 1.35 (KubeVirt 1.7 supports 1.32–1.34).
+- **Piraeus host prep** toggle — adds `install.bind_mounts` for `/etc/lvm`, `/var/lib/drbd`, `/var/lib/linstor.d`, `/var/lib/piraeus` so LINSTOR/DRBD state persists across reboots. Not needed for Longhorn.
+
+---
+
 ## v1.4.0 — 2026-06-09
 
 **Added**

@@ -7,6 +7,7 @@ source "$(dirname "$0")/lib.sh" >/dev/null 2>&1 || true
 : "${WORKDIR:=$(pwd)/build}"
 source "${WORKDIR}/outputs.env"
 source "${WORKDIR}/lxd.env"          # LXD_ENDPOINT, LXD_REMOTE, LXD_CONF (from ensure stage)
+source "${WORKDIR}/meta.env" 2>/dev/null || true   # ENABLE_VMO + selectors from the bundle
 export LXD_CONF
 : "${ISO_URL:?}" ; : "${BUILD_NAME:?}"
 : "${LXD_POOL:=default}"
@@ -26,6 +27,15 @@ log "Creating LXD VM ${VM_NAME} (${VM_CORES}c/${VM_MEM}/${VM_DISK}) on ${LXD_REM
 lxc init "${VM_NAME}" --empty --vm \
   -c limits.cpu="${VM_CORES}" -c limits.memory="${VM_MEM}" \
   -d root,size="${VM_DISK}" --storage "${LXD_POOL}"
+
+if [[ "${ENABLE_VMO:-false}" == "true" ]]; then
+  # KubeVirt inside the edge VM needs nested virtualization exposed to the guest.
+  # Requires the LXD host's kvm_intel/amd to have nested=1. TODO: validate the exact
+  # LXD knob when the deploy half is wired — CPU passthrough is the usual lever.
+  log "VMO: enabling nested virtualization on ${VM_NAME}"
+  lxc config set "${VM_NAME}" raw.qemu='-cpu host' \
+    || log "WARN: could not set nested-virt CPU passthrough — validate the LXD nested-virt config"
+fi
 # Attach the imported ISO and make it boot first.
 lxc config device add "${VM_NAME}" installer disk \
   pool="${LXD_POOL}" source="${ISO_VOL}" boot.priority=10
