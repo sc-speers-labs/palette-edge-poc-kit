@@ -4,6 +4,16 @@ All notable changes to this toolkit are documented here.
 
 ---
 
+## v1.8.0 — 2026-06-10
+
+**Changed**
+- **Image Registry is now build-only.** The registry field still drives the build/push target (`.arg IMAGE_REGISTRY`) and the BYOOS provider-image ref (`system.registry`), but it is **no longer injected into user-data**. Removed the `Insecure registry` toggle (`stylus.registryCredentials`) and the `Registry IP` (`/etc/hosts`) field.
+
+**Why**
+- Declaring `registryCredentials` made Palette use that registry as a **pull-through mirror for *all* images** — so every pack image (Cilium, Longhorn, agents) was rewritten to `<registry>/us-docker.pkg.dev/...` and 404'd, since only the provider image lived there. With it gone, **pack images pull from the public Palette registry** and only the provider image comes from your registry. Point the registry at a **TLS endpoint with a real (e.g. Let's Encrypt) cert** so no insecure flag or baked cert is needed; the `/etc/hosts` band-aid is no longer required.
+
+---
+
 ## v1.7.0 — 2026-06-09
 
 **Added**
