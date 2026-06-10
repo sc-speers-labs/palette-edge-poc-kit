@@ -64,7 +64,7 @@ pipeline {
           if [ -n "${PROJECT_NAME}" ]; then sed -i '/^PROJECT_NAME=/d' build/outputs.env; echo "PROJECT_NAME=${PROJECT_NAME}" >> build/outputs.env; fi
           echo "--- deploy inputs ---"; cat build/outputs.env
         '''
-        sh 'BUILD_TAG="exist-${SOURCE_BUILD}" ./ci/deploy-standalone.sh'
+        sh 'VM_TAG="exist-${SOURCE_BUILD}" ./ci/deploy-standalone.sh'
         sh './ci/wait-palette-register.sh'
       }
       post {

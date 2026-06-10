@@ -10,7 +10,7 @@ metadata:
   namespace: edgeforge-build
   labels:
     app: edge-vm
-    build: "${BUILD_TAG}"
+    build: "${VM_TAG}"
 spec:
   nodeSelector:
     edge-kvm: "true"          # any KVM node with headroom

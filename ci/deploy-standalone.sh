@@ -11,10 +11,12 @@ CI_DIR="$(cd "$(dirname "$0")" && pwd)"
 [[ -f "${WORKDIR}/outputs.env" ]] && source "${WORKDIR}/outputs.env"
 : "${ISO_URL:?ISO_URL missing — is build/outputs.env present?}"
 : "${BUILD_NAME:=edge}" ; : "${ENABLE_VMO:=false}" ; : "${DATA_DISK_GB:=0}"
-: "${BUILD_TAG:=${BUILD_NUMBER:-manual}}"
+# NB: don't name this BUILD_TAG — Jenkins exports a built-in BUILD_TAG=jenkins-<job>-<num>
+# (has spaces/uppercase) that would override our default and make an invalid pod name.
+VM_TAG="$(printf '%s' "${VM_TAG:-${BUILD_NUMBER:-manual}}" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9-' '-' | sed 's/^-*//; s/-*$//')"
 NS=edgeforge-build
-export VM_POD_NAME="edge-vm-${BUILD_TAG}"
-export ISO_URL BUILD_NAME ENABLE_VMO DATA_DISK_GB BUILD_TAG
+export VM_POD_NAME="edge-vm-${VM_TAG}"
+export ISO_URL BUILD_NAME ENABLE_VMO DATA_DISK_GB VM_TAG
 
 command -v envsubst >/dev/null 2>&1 || apk add --no-cache gettext >/dev/null 2>&1 || true
 
@@ -27,7 +29,7 @@ kubectl -n "$NS" create configmap edge-vm-run \
 kubectl -n "$NS" delete pod "${VM_POD_NAME}" --ignore-not-found --wait=true >/dev/null 2>&1 || true
 
 log "Launching standalone VM pod ${VM_POD_NAME} on an edge-kvm node (VMO=${ENABLE_VMO})"
-envsubst '${VM_POD_NAME} ${BUILD_TAG} ${ISO_URL} ${BUILD_NAME} ${ENABLE_VMO} ${DATA_DISK_GB}' \
+envsubst '${VM_POD_NAME} ${VM_TAG} ${ISO_URL} ${BUILD_NAME} ${ENABLE_VMO} ${DATA_DISK_GB}' \
   < "${CI_DIR}/edge-vm-pod.yaml" | kubectl -n "$NS" apply -f -
 
 log "Waiting for the VM pod to start (qemu launch)..."
