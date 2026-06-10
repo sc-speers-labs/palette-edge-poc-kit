@@ -9,13 +9,18 @@ set -eu
 : "${ISO_URL:?ISO_URL env required}"
 : "${BUILD_NAME:=edge}" ; : "${ENABLE_VMO:=false}" ; : "${DATA_DISK_GB:=0}"
 : "${VM_CORES:=5}" ; : "${VM_MEM:=10096}"   # Spectro-recommended; keep >= this for VMO
+# CanvOS's state+recovery partitions consume ~45GiB to hold the provider image, so the
+# COS_PERSISTENT partition (/var/lib/kubelet|containerd|longhorn) = disk minus ~45GiB. The
+# VMO kubelet tuning reserves ~10GiB ephemeral-storage, so a 60G disk (10GiB persistent)
+# starves kubelet. 120G → ~70GiB persistent, room for the reservation + Longhorn + images.
+: "${DISK_GB:=120}"
 WD=/vm ; mkdir -p "$WD"
 
 command -v qemu-system-x86_64 >/dev/null 2>&1 || apk add --no-cache qemu-system-x86_64 qemu-img curl >/dev/null
 
 echo "[edge-vm] fetching ISO ${ISO_URL}"
 curl -fsSL -o "${WD}/edge.iso" "${ISO_URL}"
-qemu-img create -f qcow2 "${WD}/edge-disk.qcow2" 60G >/dev/null
+qemu-img create -f qcow2 "${WD}/edge-disk.qcow2" "${DISK_GB}G" >/dev/null
 
 # Optional second disk for Piraeus lvm-thin (-> guest /dev/vdb; no bootindex).
 DATA_OPT=""
