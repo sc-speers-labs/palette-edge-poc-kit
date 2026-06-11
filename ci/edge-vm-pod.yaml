@@ -30,8 +30,8 @@ spec:
         - { name: ENABLE_VMO,   value: "${ENABLE_VMO}" }
         - { name: DATA_DISK_GB, value: "${DATA_DISK_GB}" }
       resources:
-        requests: { cpu: "5", memory: "10Gi" }   # ~10Gi VM + overhead
-        limits:   { cpu: "8", memory: "13Gi" }
+        requests: { cpu: "6", memory: "10Gi" }    # 8-vCPU VM (VM_CORES=8) + qemu overhead
+        limits:   { cpu: "10", memory: "13Gi" }
       volumeMounts:
         - { name: kvm,     mountPath: /dev/kvm }
         - { name: scripts, mountPath: /scripts }

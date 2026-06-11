@@ -8,7 +8,10 @@
 set -eu
 : "${ISO_URL:?ISO_URL env required}"
 : "${BUILD_NAME:=edge}" ; : "${ENABLE_VMO:=false}" ; : "${DATA_DISK_GB:=0}"
-: "${VM_CORES:=5}" ; : "${VM_MEM:=10096}"   # Spectro-recommended; keep >= this for VMO
+# VM_CORES=8: the VMO kubelet tuning reserves systemReserved cpu:4, so a 5-vCPU VM left only
+# ~1 allocatable CPU — the control-plane static pods ate it and the Palette mgmt agents went
+# Pending (Insufficient cpu), so the cluster never reached Running. 8 → ~4 allocatable.
+: "${VM_CORES:=8}" ; : "${VM_MEM:=10096}"   # Spectro-recommended mem; keep >= this for VMO
 # CanvOS's state+recovery partitions consume ~45GiB to hold the provider image, so the
 # COS_PERSISTENT partition (/var/lib/kubelet|containerd|longhorn) = disk minus ~45GiB. The
 # VMO kubelet tuning reserves ~10GiB ephemeral-storage, so a 60G disk (10GiB persistent)
