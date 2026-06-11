@@ -1,0 +1,93 @@
+# Auto-renews the registry.speers.nu Let's Encrypt cert (lego + IONOS DNS-01) and refreshes
+# the registry-speers-tls secret. Self-bootstrapping: issues if the PVC has no cert yet,
+# otherwise renews only when <30 days remain (a no-op the rest of the time). Requires the
+# ionos-dns-credentials secret (key IONOS_API_KEY); create it once:
+#   kubectl -n edgeforge-build create secret generic ionos-dns-credentials \
+#     --from-literal=IONOS_API_KEY='<prefix>.<secret>'
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cert-renewer
+  namespace: edgeforge-build
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cert-renewer
+  namespace: edgeforge-build
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cert-renewer
+  namespace: edgeforge-build
+subjects:
+  - { kind: ServiceAccount, name: cert-renewer, namespace: edgeforge-build }
+roleRef: { kind: Role, name: cert-renewer, apiGroup: rbac.authorization.k8s.io }
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: registry-cert-data           # persists the lego account + cert + binary across runs
+  namespace: edgeforge-build
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: longhorn
+  resources: { requests: { storage: 128Mi } }
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: registry-cert-renew
+  namespace: edgeforge-build
+spec:
+  schedule: "17 3 * * *"             # daily 03:17 — lego renew is a no-op until <30d to expiry
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          serviceAccountName: cert-renewer
+          restartPolicy: Never
+          containers:
+            - name: renew
+              image: alpine/k8s:1.31.1     # sh + curl + tar + kubectl
+              env:
+                - { name: EMAIL, value: tnjeditor@gmail.com }
+                - name: IONOS_API_KEY
+                  valueFrom: { secretKeyRef: { name: ionos-dns-credentials, key: IONOS_API_KEY } }
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -eu
+                  mkdir -p /data/bin
+                  if [ ! -x /data/bin/lego ]; then
+                    V=$(curl -fsSL https://api.github.com/repos/go-acme/lego/releases/latest | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)
+                    [ -n "$V" ] || V=v4.21.0
+                    echo "downloading lego $V"
+                    curl -fsSL -o /tmp/lego.tgz "https://github.com/go-acme/lego/releases/download/${V}/lego_${V}_linux_amd64.tar.gz"
+                    tar xzf /tmp/lego.tgz -C /data/bin lego
+                  fi
+                  export LEGO_PATH=/data LEGO_EMAIL="$EMAIL" LEGO_DOMAINS=registry.speers.nu LEGO_DNS=ionos LEGO_ACCEPT_TOS=true
+                  if [ -f /data/certificates/registry.speers.nu.crt ]; then
+                    /data/bin/lego renew --days 30
+                  else
+                    /data/bin/lego run
+                  fi
+                  kubectl -n edgeforge-build create secret tls registry-speers-tls \
+                    --cert=/data/certificates/registry.speers.nu.crt \
+                    --key=/data/certificates/registry.speers.nu.key \
+                    --dry-run=client -o yaml | kubectl -n edgeforge-build apply -f -
+                  echo "registry.speers.nu cert renew/apply complete"
+              volumeMounts:
+                - { name: data, mountPath: /data }
+          volumes:
+            - name: data
+              persistentVolumeClaim: { claimName: registry-cert-data }
