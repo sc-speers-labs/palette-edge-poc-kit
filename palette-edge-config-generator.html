@@ -491,7 +491,7 @@
 
       <div class="field">
         <label>Image Registry</label>
-        <input type="text" id="imageRegistry" value="registry.cabin" oninput="update()">
+        <input type="text" id="imageRegistry" value="registry.speers.nu" oninput="update()">
         <div class="field-hint warn" id="ttlWarning">⚠ ttl.sh can't host CanvOS provider images — its tag must be a TTL (1h–24h), not the semantic tag the cluster pulls. Use a persistent registry.</div>
         <div class="field-hint">Where the build pushes the provider image, and the registry the BYOOS profile points at. <strong>Not</strong> written into user-data — the edge host must resolve and trust this registry on its own (a TLS registry with a real cert; pack images pull from the public Palette registry).</div>
       </div>

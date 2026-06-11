@@ -1,6 +1,10 @@
 # In-cluster OCI registry for CanvOS provider images (persistent, semantic tags).
-# Insecure HTTP over ingress registry.cabin — the build pod pushes here and the edge
-# host pulls from here (both must treat it as an insecure registry; see BUILD-PIPELINE.md).
+# Served over HTTPS at ingress host registry.speers.nu with a Let's Encrypt cert
+# (issued via lego + IONOS DNS-01 into the registry-speers-tls secret; renew before expiry).
+# Trusted TLS means NO insecure-registry config and NO registryCredentials in user-data —
+# the edge host pulls the provider image over HTTPS; pack images pull from the public
+# Palette registry. The host must resolve registry.speers.nu -> 192.168.5.13 (a CoreDNS
+# hosts override handles this in-cluster, dodging UniFi DNS-rebind protection). See BUILD-PIPELINE.md.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -57,8 +61,11 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-read-timeout: "900"
 spec:
   ingressClassName: nginx
+  tls:
+    - hosts: [registry.speers.nu]
+      secretName: registry-speers-tls     # Let's Encrypt cert (lego, IONOS DNS-01); see BUILD-PIPELINE.md
   rules:
-    - host: registry.cabin
+    - host: registry.speers.nu
       http:
         paths:
           - path: /
