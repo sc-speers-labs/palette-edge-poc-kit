@@ -24,14 +24,22 @@ PUID="$(curl -sk -m 15 -H "ApiKey: ${PALETTE_API_KEY}" "${PALETTE_API}/v1/projec
 log "Project '${PROJECT_NAME}' -> ${PUID}"
 
 if [ -z "$HOST_UID" ] && [ -n "$HOST_NAME" ]; then
-  HOST_UID="$(curl -fsS -m 15 -H "ApiKey: ${PALETTE_API_KEY}" -H "ProjectUid: ${PUID}" \
+  HOST_UID="$(curl -sk -m 15 -H "ApiKey: ${PALETTE_API_KEY}" -H "ProjectUid: ${PUID}" \
     "${PALETTE_API}/v1/edgehosts?limit=200" \
     | jq -r --arg n "$HOST_NAME" '.items[]? | select(.metadata.name==$n) | .metadata.uid' | head -1)"
 fi
 [ -n "$HOST_UID" ] || die "No host to delete — set HOST_UID or HOST_NAME, or pull a deploy-record artifact."
 
-name="$(curl -fsS -m 15 -H "ApiKey: ${PALETTE_API_KEY}" -H "ProjectUid: ${PUID}" \
-  "${PALETTE_API}/v1/edgehosts/${HOST_UID}" 2>/dev/null | jq -r '.metadata.name // "?"')"
+# Idempotent: a 404 here means the host is already gone (e.g. a stale deploy-record) — that's
+# success for a deregister, not an error. (Don't use curl -f; it would die before we can tell.)
+code="$(curl -sk -m 15 -o /tmp/host.json -w '%{http_code}' \
+  -H "ApiKey: ${PALETTE_API_KEY}" -H "ProjectUid: ${PUID}" "${PALETTE_API}/v1/edgehosts/${HOST_UID}")"
+if [ "${code}" = "404" ]; then
+  log "Edge host ${HOST_UID} not found in '${PROJECT_NAME}' — already deregistered, nothing to do."
+  exit 0
+fi
+[[ "${code}" =~ ^2 ]] || die "Edge host lookup failed (HTTP ${code})."
+name="$(jq -r '.metadata.name // "?"' /tmp/host.json)"
 log "Target: edge host '${name}' (${HOST_UID}) in project '${PROJECT_NAME}'."
 
 if [ "$DRY_RUN" = "true" ]; then
