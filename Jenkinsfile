@@ -56,7 +56,7 @@ pipeline {
     }
 
     stage('Deploy & verify') {
-      when { expression { return params.DEPLOY } }
+      when { beforeAgent true; expression { return params.DEPLOY } }
       // Light ops agent (kubectl+curl) launches a STANDALONE edge-vm pod that outlives the
       // job (so the host can be paired into a cluster), then polls Palette. The VM is NOT
       // torn down here — remove it later via the ops job (ACTION=teardown-vm).

@@ -44,7 +44,7 @@ pipeline {
 
   stages {
     stage('Report') {
-      when { expression { params.ACTION == 'report' } }
+      when { beforeAgent true; expression { params.ACTION == 'report' } }
       agent { kubernetes { yamlFile 'ci/ops-agent-pod.yaml'; defaultContainer 'ops' } }
       steps {
         sh 'apk add --no-cache bash curl jq coreutils >/dev/null 2>&1 || true'
@@ -53,7 +53,7 @@ pipeline {
     }
 
     stage('Deploy existing') {
-      when { expression { params.ACTION == 'deploy-existing' } }
+      when { beforeAgent true; expression { params.ACTION == 'deploy-existing' } }
       // Light ops agent launches a STANDALONE, persistent edge-vm pod (outlives this job)
       // from a prior build's artifact, then polls Palette. No teardown — use teardown-vm.
       agent { kubernetes { yamlFile 'ci/ops-agent-pod.yaml'; defaultContainer 'ops' } }
@@ -77,7 +77,7 @@ pipeline {
     }
 
     stage('Teardown VM') {
-      when { expression { params.ACTION == 'teardown-vm' } }
+      when { beforeAgent true; expression { params.ACTION == 'teardown-vm' } }
       agent { kubernetes { yamlFile 'ci/ops-agent-pod.yaml'; defaultContainer 'ops' } }
       steps {
         sh 'apk add --no-cache bash curl jq coreutils >/dev/null 2>&1 || true'
@@ -86,7 +86,7 @@ pipeline {
     }
 
     stage('Deregister host') {
-      when { expression { params.ACTION == 'deregister-host' } }
+      when { beforeAgent true; expression { params.ACTION == 'deregister-host' } }
       agent { kubernetes { yamlFile 'ci/ops-agent-pod.yaml'; defaultContainer 'ops' } }
       steps {
         sh 'apk add --no-cache bash curl jq coreutils >/dev/null 2>&1 || true'
@@ -97,7 +97,7 @@ pipeline {
     }
 
     stage('GC registry') {
-      when { expression { params.ACTION == 'gc-registry' } }
+      when { beforeAgent true; expression { params.ACTION == 'gc-registry' } }
       agent { kubernetes { yamlFile 'ci/ops-agent-pod.yaml'; defaultContainer 'ops' } }
       steps {
         sh 'apk add --no-cache bash curl jq coreutils >/dev/null 2>&1 || true'
@@ -106,7 +106,7 @@ pipeline {
     }
 
     stage('Prune ISOs') {
-      when { expression { params.ACTION == 'prune-isos' } }
+      when { beforeAgent true; expression { params.ACTION == 'prune-isos' } }
       agent { kubernetes { yamlFile 'ci/ops-agent-pod.yaml'; defaultContainer 'ops' } }
       steps {
         sh 'apk add --no-cache bash curl jq coreutils >/dev/null 2>&1 || true'
@@ -115,7 +115,7 @@ pipeline {
     }
 
     stage('Reap pods') {
-      when { expression { params.ACTION == 'reap-pods' } }
+      when { beforeAgent true; expression { params.ACTION == 'reap-pods' } }
       agent { kubernetes { yamlFile 'ci/ops-agent-pod.yaml'; defaultContainer 'ops' } }
       steps {
         sh 'apk add --no-cache bash curl jq coreutils >/dev/null 2>&1 || true'
