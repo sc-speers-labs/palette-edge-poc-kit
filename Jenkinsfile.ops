@@ -35,7 +35,10 @@ pipeline {
     PALETTE_API         = 'https://cust-eng.console.spectrocloud.com'
     PALETTE_PROJECT_UID = '6539402abeefa11ca7267d44'
     REGISTRY_VIP        = '192.168.5.13'
-    WORKDIR             = "${WORKSPACE}/build"
+    // NB: do NOT set WORKDIR=${WORKSPACE}/build here — this pipeline is `agent none`, so
+    // WORKSPACE is empty when the environment block evaluates and WORKDIR becomes garbage,
+    // so the scripts miss the copyArtifacts'd build/deploy-record.env. Let each script
+    // default WORKDIR to $(pwd)/build (= the real per-stage agent workspace).
     BUILD_JOB           = 'Spectro Cloud/Build Edge Images and Test'
   }
 
